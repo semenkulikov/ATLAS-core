@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+
 # Commands are argv lists. The shell is never invoked.
 import subprocess  # nosec B404
 from dataclasses import dataclass
