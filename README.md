@@ -27,4 +27,11 @@ uv run --project backend python -m atlas.cli.main token new --db /tmp/atlas.db
 uv run --project backend python -m atlas.cli.main serve --db /tmp/atlas.db --root fixtures/partial-host --tcp 127.0.0.1:8765
 ```
 
+Build the panel and the same process serves it from `frontend/dist`:
+
+```bash
+npm install --prefix frontend
+npm run build --prefix frontend
+```
+
 License: Apache-2.0.

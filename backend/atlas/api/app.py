@@ -9,10 +9,12 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from atlas.api.problems import Problem, problem_response
 from atlas.api.settings import Settings
@@ -110,6 +112,7 @@ def create_app(
     app.add_api_route("/api/v1/logs", logs, methods=["GET"])
     app.add_api_route("/api/v1/export", export, methods=["GET"])
     app.add_api_websocket_route("/api/v1/stream", stream)
+    _mount_panel(app)
     return app
 
 
@@ -613,3 +616,12 @@ def _origin_ok(origin: str, host: str) -> bool:
     if not host:
         return False
     return origin == f"https://{host}" or origin == f"http://{host}"
+
+
+_PANEL = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+
+
+def _mount_panel(app: FastAPI) -> None:
+    """Serve the built panel from the same origin as the API when it has been built."""
+    if (_PANEL / "index.html").is_file():
+        app.mount("/", StaticFiles(directory=_PANEL, html=True), name="panel")
