@@ -4,6 +4,7 @@ export const routes = [
   "overview",
   "projects",
   "services",
+  "schedules",
   "containers",
   "network",
   "users",
@@ -21,6 +22,7 @@ const en = {
   overview: "Overview",
   projects: "Projects",
   services: "Services",
+  schedules: "Schedules",
   containers: "Containers",
   network: "Network",
   users: "Users",
@@ -67,6 +69,7 @@ const en = {
   typeToConfirm: "Type the name to confirm",
   saved: "Recorded",
   channelsOff: "Alert channels are off. Nothing is sent off this host.",
+  filter: "Filter",
 };
 
 const ru: typeof en = {
@@ -74,6 +77,7 @@ const ru: typeof en = {
   overview: "Обзор",
   projects: "Проекты",
   services: "Службы",
+  schedules: "Расписания",
   containers: "Контейнеры",
   network: "Сеть",
   users: "Пользователи",
@@ -120,6 +124,7 @@ const ru: typeof en = {
   typeToConfirm: "Введите имя для подтверждения",
   saved: "Записано",
   channelsOff: "Каналы оповещений выключены. Наружу ничего не уходит.",
+  filter: "Фильтр",
 };
 
 const dictionaries = { en, ru };

@@ -38,6 +38,6 @@ Alert channels stay off until the owner enables one. `atlas doctor --db <file>` 
 
 `packaging/install.sh` creates `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas`, and the systemd units. It does not download a release. Passing `--url` exits with an error until a signed archive exists.
 
-The security model is in [docs/security-model.md](docs/security-model.md) ([русский](docs/security-model.ru.md)). Detector notes are in [docs/detectors.md](docs/detectors.md). Collected paths are printed by `atlas manifest`.
+The security model is in [docs/security-model.md](docs/security-model.md) ([русский](docs/security-model.ru.md)). Detector notes are in [docs/detectors.md](docs/detectors.md). Commands, questions, and publishing notes are in [docs/cli.md](docs/cli.md), [docs/faq.md](docs/faq.md), and [docs/publish.md](docs/publish.md). Collected paths are printed by `atlas manifest`.
 
 License: Apache-2.0.

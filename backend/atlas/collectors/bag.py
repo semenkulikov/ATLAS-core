@@ -44,11 +44,13 @@ class Bag:
     sources: list[SourceStatus] = field(default_factory=list)
 
     def read(self, view: HostView, path: str, *, max_bytes: int = 1_048_576) -> ReadOutcome:
+        view.files_read.append(path)
         outcome = view.read(path, max_bytes=max_bytes)
         self.sources.append(SourceStatus(self.collector, path, outcome.status, outcome.reason))
         return outcome
 
     def command(self, view: HostView, argv: list[str], *, timeout: float = 8.0) -> CommandResult:
+        view.commands_run.append(" ".join(argv))
         result = view.runner.run(argv, timeout=timeout)
         if result.stdout or result.code == 0:
             status = "ok"

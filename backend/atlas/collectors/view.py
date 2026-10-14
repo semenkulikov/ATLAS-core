@@ -7,7 +7,7 @@ import os
 
 # Commands are argv lists. The shell is never invoked.
 import subprocess  # nosec B404
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -144,6 +144,8 @@ class HostView:
     root: Path
     runner: CommandRunner
     now: datetime
+    files_read: list[str] = field(default_factory=list)
+    commands_run: list[str] = field(default_factory=list)
 
     @property
     def is_live(self) -> bool:

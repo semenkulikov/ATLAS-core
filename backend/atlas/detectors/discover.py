@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess  # nosec B404
 from dataclasses import dataclass
 from datetime import datetime
@@ -450,7 +451,7 @@ def _index_docs(view: HostView, root: str, project_id: str) -> list[dict[str, ob
             outcome = view.read(logical, max_bytes=_MAX_DOC_BYTES)
             if not outcome.ok or outcome.text is None:
                 continue
-            body = mask_secrets(outcome.text)
+            body = _plain_text(mask_secrets(outcome.text))
             stat = path.stat()
             found.append(
                 {
@@ -463,6 +464,11 @@ def _index_docs(view: HostView, root: str, project_id: str) -> list[dict[str, ob
                 }
             )
     return found
+
+
+def _plain_text(text: str) -> str:
+    """Drop HTML tags so a README cannot carry a script into the panel."""
+    return re.sub(r"<[^>]{0,200}>", "", text)
 
 
 def _is_doc(filename: str, depth: int) -> bool:

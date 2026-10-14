@@ -114,9 +114,12 @@
       {:else if route === "services"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "services")}</h1>
         <Records {lang} path="/api/v1/services" detail="/api/v1/services" onopen={openFact} canAct={account.role !== "viewer"} />
+      {:else if route === "schedules"}
+        <h1 class="mb-4 text-2xl text-paper">{copy(lang, "schedules")}</h1>
+        <Records {lang} path="/api/v1/schedules" detail={null} onopen={openFact} />
       {:else if route === "containers"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "containers")}</h1>
-        <Records {lang} path="/api/v1/containers" detail={null} onopen={openFact} canAct={account.role !== "viewer"} />
+        <Records {lang} path="/api/v1/containers" detail="/api/v1/containers" onopen={openFact} canAct={account.role !== "viewer"} />
       {:else if route === "network"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "network")}</h1>
         <Records {lang} path="/api/v1/ports" detail={null} onopen={openFact} />

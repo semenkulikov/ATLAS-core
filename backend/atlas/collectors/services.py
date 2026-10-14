@@ -14,6 +14,7 @@ from atlas.collectors.parse import (
     parse_proc_net,
     parse_systemctl_show,
     parse_unit,
+    tcp_state_counts,
 )
 from atlas.collectors.view import HostView, logical_path
 from atlas.domain import CollectorResult
@@ -159,6 +160,17 @@ class PortsCollector:
             outcome = bag.read(view, logical)
             if not outcome.ok or outcome.text is None:
                 continue
+            if protocol == "tcp":
+                for state, count in tcp_state_counts(outcome.text).items():
+                    bag.add_file(
+                        "host",
+                        f"tcp.{state}",
+                        str(count),
+                        logical,
+                        1,
+                        f"{state} {count}",
+                        outcome.sha256,
+                    )
             for port in parse_proc_net(outcome.text, protocol):
                 found = True
                 _emit_port(bag, logical, outcome.sha256, outcome.text, port, inodes)
@@ -430,6 +442,7 @@ def socket_owners(view: HostView) -> dict[str, tuple[int, str, str]]:
         if seen > 2000:
             break
         comm, cmdline = process_names(entry)
+        view.files_read.append(f"/proc/{entry.name}/fd")
         try:
             fds = list((entry / "fd").iterdir())
         except OSError:
@@ -460,6 +473,8 @@ def processes(view: HostView) -> list[tuple[int, str, str]]:
     for entry in proc.iterdir():
         if not entry.name.isdigit():
             continue
+        view.files_read.append(f"/proc/{entry.name}/comm")
+        view.files_read.append(f"/proc/{entry.name}/cmdline")
         comm, cmdline = process_names(entry)
         if comm or cmdline:
             rows.append((int(entry.name), comm, cmdline))

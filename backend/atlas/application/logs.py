@@ -6,6 +6,7 @@ scan root, and names that hold credentials are refused.
 
 from __future__ import annotations
 
+import re
 import subprocess  # nosec B404
 from pathlib import Path
 
@@ -23,15 +24,19 @@ class LogError(Exception):
         super().__init__(message)
 
 
-def read_log(root: Path, source: str, limit: int) -> dict[str, object]:
+def read_log(
+    root: Path,
+    source: str,
+    limit: int,
+    *,
+    query: str = "",
+    pattern: str = "",
+) -> dict[str, object]:
     """Return the newest lines from a file under ``root`` or from journald."""
     bounded = max(1, min(limit, 500))
     if source.startswith("journal:"):
-        return {
-            "status": "ok",
-            "source": source,
-            "lines": _journal(source.removeprefix("journal:"), bounded),
-        }
+        lines = _journal(source.removeprefix("journal:"), bounded)
+        return {"status": "ok", "source": source, "lines": _select(lines, query, pattern)}
     path = _inside_root(root, source)
     if path.name == ".env" or path.name.endswith(".env"):
         text = "\n".join(env_key_names(path.read_text(encoding="utf-8", errors="replace")))
@@ -40,7 +45,22 @@ def read_log(root: Path, source: str, limit: int) -> dict[str, object]:
     if "PRIVATE KEY" in text:
         raise LogError("This file looks like a private key and is not shown.")
     lines = [mask_secrets(line)[:2000] for line in text.splitlines()[-bounded:]]
-    return {"status": "ok", "source": source, "lines": lines}
+    return {"status": "ok", "source": source, "lines": _select(lines, query, pattern)}
+
+
+def _select(lines: list[str], query: str, pattern: str) -> list[str]:
+    if len(pattern) > 80 or "(+" in pattern or ")+" in pattern or "*)" in pattern:
+        raise LogError("The pattern is too broad.")
+    chosen = lines
+    if pattern:
+        try:
+            compiled = re.compile(pattern)
+        except re.error as exc:
+            raise LogError("The pattern is not a valid expression.") from exc
+        chosen = [line for line in chosen if compiled.search(line)]
+    if query:
+        chosen = [line for line in chosen if query in line]
+    return chosen
 
 
 def _inside_root(root: Path, source: str) -> Path:

@@ -25,6 +25,7 @@ DEFAULT_RULES = (
     ("unit_failed", "state"),
     ("container_down", "state"),
     ("memory_low", "threshold"),
+    ("cert_expiring", "state"),
 )
 _KINDS = {"webhook": ("https://", "http://"), "telegram": ("",), "smtp": ("",)}
 COOLDOWN = timedelta(minutes=15)
@@ -96,7 +97,7 @@ def evaluate(
     """Open, resolve, and optionally deliver alerts for the latest scan."""
     stamped = now or datetime.now(UTC)
     ensure_rules(store.conn)
-    findings = _findings(store)
+    findings = _findings(store, stamped)
     open_keys = _open_keys(store.conn)
     created: list[dict[str, object]] = []
     for rule, subject, message in findings:
@@ -113,7 +114,7 @@ def evaluate(
     return created
 
 
-def _findings(store: Store) -> list[tuple[str, str, str]]:
+def _findings(store: Store, now: datetime) -> list[tuple[str, str, str]]:
     scan_id = store.latest_scan_id()
     if scan_id is None:
         return []
@@ -140,6 +141,15 @@ def _findings(store: Store) -> list[tuple[str, str, str]]:
                 found.append(("container_down", str(row["key"]), f"{row['key']} is {state}"))
     if "memory_low" in enabled and _memory_low(store.conn):
         found.append(("memory_low", "host", "available memory is below 10 percent"))
+    if "cert_expiring" in enabled:
+        horizon = now + timedelta(days=14)
+        for row in store.entities(scan_id, "certificate"):
+            raw = row["payload"].get("not_after")
+            if not isinstance(raw, str):
+                continue
+            expiry = datetime.fromisoformat(raw)
+            if expiry <= horizon:
+                found.append(("cert_expiring", str(row["key"]), f"{row['key']} expires {raw}"))
     return found
 
 

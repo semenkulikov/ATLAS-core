@@ -7,6 +7,7 @@ import hashlib
 import re
 import socket
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 
 def parse_os_release(text: str) -> dict[str, tuple[str, int]]:
@@ -360,6 +361,53 @@ def parse_proc_net(text: str, protocol: str) -> list[ListenPort]:
     return ports
 
 
+_TCP_STATES = {
+    "01": "established",
+    "02": "syn_sent",
+    "03": "syn_recv",
+    "06": "time_wait",
+    "08": "close_wait",
+    "0A": "listen",
+}
+
+
+def tcp_state_counts(text: str) -> dict[str, int]:
+    """Count TCP rows in ``/proc/net/tcp`` by state name."""
+    counts: dict[str, int] = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) < 4 or ":" not in parts[1]:
+            continue
+        name = _TCP_STATES.get(parts[3], "other")
+        counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def certificate_not_after(pem: str) -> datetime | None:
+    """Return the later UTCTime or GeneralizedTime in a public certificate."""
+    body = "".join(line.strip() for line in pem.splitlines() if not line.startswith("-----"))
+    try:
+        der = base64.b64decode(body)
+    except (ValueError, TypeError):
+        return None
+    found: list[datetime] = []
+    for match in re.finditer(rb"\x17\x0d(\d{12}Z)", der):
+        try:
+            found.append(
+                datetime.strptime(match.group(1).decode(), "%y%m%d%H%M%SZ").replace(tzinfo=UTC)
+            )
+        except ValueError:
+            continue
+    for match in re.finditer(rb"\x18\x0f(\d{14}Z)", der):
+        try:
+            found.append(
+                datetime.strptime(match.group(1).decode(), "%Y%m%d%H%M%SZ").replace(tzinfo=UTC)
+            )
+        except ValueError:
+            continue
+    return max(found) if found else None
+
+
 def _decode_address(hex_addr: str) -> str:
     raw = bytes.fromhex(hex_addr)
     if len(raw) == 4:
@@ -419,6 +467,7 @@ class ServerSite:
     listens: list[tuple[int, str]] = field(default_factory=list)
     proxies: list[tuple[int, str]] = field(default_factory=list)
     roots: list[tuple[int, str]] = field(default_factory=list)
+    certificates: list[tuple[int, str]] = field(default_factory=list)
 
 
 def parse_nginx(path: str, text: str) -> list[ServerSite]:
@@ -463,6 +512,10 @@ def _take_nginx_directive(site: ServerSite, line: str, number: int) -> None:
         value = body.split(None, 1)[1].replace(";", "").strip() if " " in body else ""
         if value:
             site.proxies.append((number, value))
+    elif body.startswith("ssl_certificate ") and not body.startswith("ssl_certificate_key"):
+        parts = body.replace(";", "").split()
+        if len(parts) >= 2:
+            site.certificates.append((number, parts[1]))
     elif body.startswith("root ") or body == "root":
         parts = body.replace(";", "").split()
         if len(parts) >= 2:

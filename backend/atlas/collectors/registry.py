@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from atlas.collectors.host import (
     NetworkCollector,
     OsCollector,
@@ -67,3 +69,28 @@ def render_manifest(language: str) -> str:
         lines.append(f"| {row.collector} | {row.kind} | `{row.target}` | {root} | {purpose} |")
     lines.append("")
     return "\n".join(lines)
+
+
+def undeclared(files: list[str], commands: list[str]) -> list[str]:
+    """Return reads and commands that no collector declaration covers."""
+    declared = declarations()
+    missing: list[str] = []
+    for path in files:
+        if not any(row.kind == "file" and _covers(row.target, path) for row in declared):
+            missing.append(path)
+    for command in commands:
+        if not any(
+            row.kind == "command" and _command_covers(row.target, command) for row in declared
+        ):
+            missing.append(command)
+    return missing
+
+
+def _covers(pattern: str, path: str) -> bool:
+    starred = re.sub(r"<[^>]+>", "*", pattern)
+    escaped = re.escape(starred).replace(r"\*\*", ".*").replace(r"\*", ".*")
+    return re.fullmatch(escaped, path) is not None
+
+
+def _command_covers(declared: str, actual: str) -> bool:
+    return actual == declared or actual.startswith(declared + " ")

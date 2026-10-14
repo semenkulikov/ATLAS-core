@@ -546,9 +546,9 @@ class SshCollector:
         declare(
             "ssh",
             "file",
-            "~/.ssh/authorized_keys",
-            "Public key type and SHA256 fingerprint.",
-            "Тип и отпечаток SHA256 публичного ключа.",
+            "*/.ssh/authorized_keys",
+            "Public key type and SHA256 fingerprint in each home.",
+            "Тип и отпечаток SHA256 публичного ключа в домашнем каталоге.",
             requires_root=True,
         ),
         declare(

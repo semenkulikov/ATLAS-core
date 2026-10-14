@@ -5,6 +5,7 @@ set -eu
 prefix=/
 dry=0
 start=1
+oneshot=0
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 
 while [ $# -gt 0 ]; do
@@ -21,6 +22,10 @@ while [ $# -gt 0 ]; do
       start=0
       shift
       ;;
+    --oneshot)
+      oneshot=1
+      shift
+      ;;
     --url)
       echo "Release downloads stay disabled until a signed release exists." >&2
       exit 2
@@ -31,6 +36,15 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+
+if [ "$oneshot" -eq 1 ]; then
+  echo "oneshot report only; no units are installed"
+  if [ "$dry" -eq 1 ]; then
+    exit 0
+  fi
+  echo "Run: atlas scan --format md --format json --format html"
+  exit 0
+fi
 
 echo "prefix $prefix"
 echo "opt $prefix/opt/atlas"

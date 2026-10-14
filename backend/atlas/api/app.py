@@ -110,6 +110,8 @@ def create_app(
     app.add_api_route("/api/v1/services", services, methods=["GET"])
     app.add_api_route("/api/v1/services/{unit}", service_one, methods=["GET"])
     app.add_api_route("/api/v1/containers", containers, methods=["GET"])
+    app.add_api_route("/api/v1/containers/{container_id}", container_one, methods=["GET"])
+    app.add_api_route("/api/v1/schedules", schedules, methods=["GET"])
     app.add_api_route("/api/v1/ports", ports, methods=["GET"])
     app.add_api_route("/api/v1/users", users, methods=["GET"])
     app.add_api_route("/api/v1/ssh-keys", ssh_keys, methods=["GET"])
@@ -393,6 +395,16 @@ async def containers(request: Request) -> Response:
     return _entities(request, "container")
 
 
+async def container_one(request: Request, container_id: str) -> Response:
+    _require(request, _READ)
+    return _one_entity(request, "container", container_id)
+
+
+async def schedules(request: Request) -> Response:
+    _require(request, _READ)
+    return _entities(request, "schedule")
+
+
 async def ports(request: Request) -> Response:
     _require(request, _READ)
     return _entities(request, "port")
@@ -499,7 +511,13 @@ async def logs(request: Request) -> Response:
     source = request.query_params.get("source", "")
     try:
         limit = int(request.query_params.get("limit", "200"))
-        payload = read_log(_state(request).settings.root, source, limit)
+        payload = read_log(
+            _state(request).settings.root,
+            source,
+            limit,
+            query=request.query_params.get("q", ""),
+            pattern=request.query_params.get("pattern", ""),
+        )
     except (LogError, ValueError) as exc:
         message = exc.message if isinstance(exc, LogError) else "The log query is not valid."
         raise Problem(400, message, "logs.source") from exc

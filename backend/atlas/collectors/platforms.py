@@ -12,6 +12,7 @@ from atlas.collectors.bag import Bag, declare
 from atlas.collectors.host import read_packages
 from atlas.collectors.parse import (
     ServerSite,
+    certificate_not_after,
     parse_apache,
     parse_caddy,
     parse_nginx,
@@ -69,6 +70,20 @@ class WebCollector:
             "Caddy sites and reverse proxies.",
             "Сайты и reverse_proxy Caddy.",
         ),
+        declare(
+            "web",
+            "file",
+            "/etc/ssl/**",
+            "Public certificate named by a web server config.",
+            "Публичный сертификат, на который ссылается конфиг веб-сервера.",
+        ),
+        declare(
+            "web",
+            "file",
+            "/etc/letsencrypt/live/**",
+            "Public certificate from Let's Encrypt.",
+            "Публичный сертификат Let's Encrypt.",
+        ),
     )
 
     def collect(self, view: HostView) -> CollectorResult:
@@ -95,6 +110,13 @@ class DatastoreCollector:
             "/proc/<pid>/comm",
             "Process name of a database or broker.",
             "Имя процесса базы или брокера.",
+        ),
+        declare(
+            "datastores",
+            "file",
+            "/proc/<pid>/cmdline",
+            "Command line of a database or broker.",
+            "Командная строка базы или брокера.",
         ),
         declare(
             "datastores",
@@ -296,6 +318,7 @@ def _collect_nginx(view: HostView, bag: Bag) -> None:
             continue
         for index, site in enumerate(parse_nginx(logical, outcome.text)):
             _emit_site(bag, "nginx", f"{logical}:{index}", site, outcome.sha256, outcome.text)
+            _emit_certificates(view, bag, site)
 
 
 def _collect_apache(view: HostView, bag: Bag, directory: str) -> None:
@@ -308,6 +331,38 @@ def _collect_apache(view: HostView, bag: Bag, directory: str) -> None:
             continue
         for index, site in enumerate(parse_apache(logical, outcome.text)):
             _emit_site(bag, "apache", f"{logical}:{index}", site, outcome.sha256, outcome.text)
+
+
+def _public_cert_path(path: str) -> bool:
+    name = Path(path).name.lower()
+    if name.endswith(".key") or "privkey" in name or "private" in name:
+        return False
+    allowed = ("/etc/ssl/", "/etc/nginx/", "/etc/letsencrypt/live/")
+    return path.startswith(allowed) and name.endswith((".crt", ".pem", ".cer"))
+
+
+def _emit_certificates(view: HostView, bag: Bag, site: ServerSite) -> None:
+    for line, path in site.certificates:
+        if not _public_cert_path(path):
+            bag.add_unknown("certificate", path, "a private key path is not read")
+            continue
+        outcome = bag.read(view, path)
+        if not outcome.ok or outcome.text is None:
+            continue
+        expiry = certificate_not_after(outcome.text)
+        if expiry is None:
+            bag.add_unknown("certificate", path, "the certificate expiry could not be read")
+            continue
+        bag.add_file(
+            f"certificate:{path}",
+            "cert.not_after",
+            expiry.isoformat(),
+            path,
+            line,
+            expiry.date().isoformat(),
+            outcome.sha256,
+        )
+        bag.entity("certificate", path, {"path": path, "not_after": expiry.isoformat()})
 
 
 def _emit_site(

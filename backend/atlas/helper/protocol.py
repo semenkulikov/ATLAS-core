@@ -81,6 +81,8 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
             argv.append("--volumes")
         argv.append(name)
         return Plan(op, tuple(argv), risk, name)
+    if op == "image.prune":
+        return Plan(op, ("docker", "image", "prune", "--force"), "high", "images")
     if op == "journal.vacuum":
         size = params.get("size", "200M")
         if not isinstance(size, str) or not re.fullmatch(r"\d{1,5}[KMG]", size):

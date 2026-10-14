@@ -163,6 +163,72 @@ def test_installer_dry_run_and_prefix(tmp_path: Path) -> None:
     assert "__UID__" not in unit.read_text(encoding="utf-8")
 
 
+def test_fixture_reads_stay_inside_the_manifest() -> None:
+    from atlas.collectors.registry import COLLECTORS, undeclared
+    from atlas.collectors.view import open_view
+
+    fixture = Path(__file__).resolve().parents[2] / "fixtures" / "partial-host"
+    view = open_view(fixture)
+    for collector in COLLECTORS:
+        collector.collect(view)
+    assert undeclared(view.files_read, view.commands_run) == []
+
+
+def test_log_filter_and_certificate_date(tmp_path: Path) -> None:
+    import base64
+    from datetime import UTC, datetime, timedelta
+
+    from atlas.application.logs import LogError, read_log
+    from atlas.collectors.parse import certificate_not_after
+    from atlas.helper.protocol import build_plan
+
+    log = tmp_path / "app.log"
+    log.write_text("alpha\nbeta\n", encoding="utf-8")
+    assert read_log(tmp_path, "app.log", 20, query="alpha")["lines"] == ["alpha"]
+    try:
+        read_log(tmp_path, "app.log", 20, pattern="(.+)+")
+    except LogError as exc:
+        assert "broad" in exc.message
+    else:
+        raise AssertionError("expected the pattern to be refused")
+    der = b"\x17\x0d260101000000Z\x17\x0d261020000000Z"
+    pem = (
+        "-----BEGIN CERTIFICATE-----\n"
+        + base64.b64encode(der).decode()
+        + "\n-----END CERTIFICATE-----\n"
+    )
+    expiry = certificate_not_after(pem)
+    assert expiry == datetime(2026, 10, 20, tzinfo=UTC)
+    store = Store.open(tmp_path / "atlas.db")
+    try:
+        scan_id = _scan(store)
+        store.conn.execute(
+            "INSERT INTO entities (scan_id, kind, entity_key, payload) VALUES (?, 'certificate', ?, ?)",
+            (scan_id, "/etc/ssl/shop.crt", json.dumps({"not_after": expiry.isoformat()})),
+        )
+        store.conn.commit()
+        created = evaluate(store, now=expiry - timedelta(days=1))
+        assert any(item["rule"] == "cert_expiring" for item in created)
+    finally:
+        store.close()
+    plan = build_plan("image.prune", {})
+    assert plan.argv == ("docker", "image", "prune", "--force")
+    assert plan.confirm == "images"
+
+
+def test_oneshot_does_not_install_units(tmp_path: Path) -> None:
+    script = Path(__file__).resolve().parents[2] / "packaging" / "install.sh"
+    completed = subprocess.run(
+        ["sh", str(script), "--prefix", str(tmp_path / "root"), "--oneshot"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "oneshot" in completed.stdout
+    assert not (tmp_path / "root").exists()
+
+
 def _scan(store: Store) -> int:
     store.conn.execute(
         "INSERT INTO scans (started_at, status, mode) VALUES ('t', 'succeeded', 'test')"

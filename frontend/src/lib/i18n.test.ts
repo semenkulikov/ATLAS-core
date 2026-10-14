@@ -8,6 +8,7 @@ describe("panel copy", () => {
       overview: "",
       projects: "",
       services: "",
+      schedules: "",
       containers: "",
       network: "",
       users: "",
@@ -54,6 +55,7 @@ describe("panel copy", () => {
       typeToConfirm: "",
       saved: "",
       channelsOff: "",
+      filter: "",
     }) as CopyKey[];
     for (const key of keys) {
       expect(copy("en", key).length).toBeGreaterThan(0);
