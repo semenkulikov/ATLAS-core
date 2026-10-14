@@ -70,6 +70,7 @@ const en = {
   saved: "Recorded",
   channelsOff: "Alert channels are off. Nothing is sent off this host.",
   filter: "Filter",
+  pattern: "Pattern",
 };
 
 const ru: typeof en = {
@@ -125,6 +126,7 @@ const ru: typeof en = {
   saved: "Записано",
   channelsOff: "Каналы оповещений выключены. Наружу ничего не уходит.",
   filter: "Фильтр",
+  pattern: "Шаблон",
 };
 
 const dictionaries = { en, ru };

@@ -11,6 +11,8 @@ import sqlite3
 from atlas.metrics.sampler import HostSample
 
 _ALLOWED_PREFIXES = ("host.",)
+_POINT_BYTES = 64
+DEFAULT_METRIC_BUDGET = 200 * 1024 * 1024
 
 
 def write_sample(conn: sqlite3.Connection, sample: HostSample) -> None:
@@ -55,8 +57,31 @@ def rollup_and_prune(conn: sqlite3.Connection, *, now: int) -> int:
     _fold_rollups(conn, source_step=60, step=300, older_than=now - month)
     conn.execute("DELETE FROM metric_rollups WHERE step = 60 AND ts < ?", (now - month,))
     conn.execute("DELETE FROM metric_rollups WHERE step = 300 AND ts < ?", (now - year,))
+    enforce_metric_budget(conn)
     conn.commit()
     return int(removed)
+
+
+def enforce_metric_budget(
+    conn: sqlite3.Connection, *, limit_bytes: int = DEFAULT_METRIC_BUDGET
+) -> int:
+    """Drop the oldest raw points once their estimate passes ``limit_bytes``.
+
+    Each stored point counts as 64 bytes. The default cap is 200 MiB.
+    """
+    if limit_bytes < _POINT_BYTES:
+        raise ValueError("metric budget is below one point")
+    count = int(conn.execute("SELECT COUNT(*) AS n FROM metric_points").fetchone()["n"])
+    keep = limit_bytes // _POINT_BYTES
+    if count <= keep:
+        return 0
+    drop = count - keep
+    conn.execute(
+        "DELETE FROM metric_points WHERE rowid IN ("
+        "SELECT rowid FROM metric_points ORDER BY ts ASC, rowid ASC LIMIT ?)",
+        (drop,),
+    )
+    return drop
 
 
 def _fold(conn: sqlite3.Connection, *, source: str, step: int, older_than: int) -> None:

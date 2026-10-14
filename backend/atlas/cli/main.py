@@ -83,6 +83,19 @@ def main(argv: list[str] | None = None) -> int:
     uninstall.add_argument("--prefix", default="/")
     uninstall.add_argument("--purge", action="store_true")
     uninstall.set_defaults(func=cmd_uninstall)
+    exported = sub.add_parser("export", help="Write the latest completed scan as a report")
+    exported.add_argument("--db", required=True)
+    exported.add_argument(
+        "--format",
+        action="append",
+        choices=("md", "json", "html"),
+        dest="formats",
+        help="Repeat to choose formats. The default is all three.",
+    )
+    exported.add_argument(
+        "--output", default="atlas-export", help="Report path without an extension."
+    )
+    exported.set_defaults(func=cmd_export)
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
@@ -290,6 +303,20 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 
     removed = uninstall(Path(args.prefix), purge=bool(args.purge), run=run)
     sys.stdout.write("removed " + (", ".join(removed) if removed else "nothing") + "\n")
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    """Write the newest succeeded scan. A database with no scan exits with status 1."""
+    store = Store.open(Path(args.db))
+    try:
+        scan_id = store.latest_scan_id()
+        if scan_id is None:
+            sys.stderr.write("no completed scan\n")
+            return 1
+        _write_reports(store, scan_id, Path(args.output), args.formats or ["md", "json", "html"])
+    finally:
+        store.close()
     return 0
 
 

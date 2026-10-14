@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 from atlas.application.scan import run_scan
 from atlas.collectors.view import open_view
-from atlas.detectors.discover import discover
-from atlas.detectors.rules import apply_rules
+from atlas.detectors.discover import _git_facts, discover, find_root
+from atlas.detectors.rules import apply_rules, requirement_versions
 from atlas.domain import CollectorResult, Entity
 from atlas.knowledge.loader import reference_for
 from atlas.storage.db import Store
@@ -117,3 +119,30 @@ def test_discover_uses_a_systemd_anchor(tmp_path: Path) -> None:
     assert result.projects
     assert result.projects[0]["root_path"] == "/opt/shop"
     assert any(item.value == "FastAPI" for item in result.facts)
+
+
+def test_a_git_checkout_records_the_commit(tmp_path: Path) -> None:
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "pyproject.toml").write_text("[project]\nname = 'shop'\n", encoding="utf-8")
+    (root / "README.md").write_text("# shop\n<script>alert(1)</script>\n", encoding="utf-8")
+    (root / "requirements.txt").write_text("-r extra.txt\nDjango==4.2.16\n", encoding="utf-8")
+    _git(root, ["init"])
+    _git(root, ["config", "user.email", "ada@example.test"])
+    _git(root, ["config", "user.name", "Ada"])
+    _git(root, ["add", "pyproject.toml", "README.md", "requirements.txt"])
+    _git(root, ["commit", "-m", "init"])
+    _git(root, ["remote", "add", "origin", "https://example.test/shop.git"])
+    view = open_view(tmp_path, now=datetime(2026, 10, 14, tzinfo=UTC))
+    assert find_root(view, "/proj/README.md") == "/proj"
+    facts = _git_facts(view, "/proj", "project:shop")
+    predicates = {item.predicate: item.value for item in facts}
+    assert len(predicates["git.commit"]) == 40
+    assert predicates["git.remote"] == "https://example.test/shop.git"
+    assert predicates["git.dirty"] == "no"
+    versions = requirement_versions("-r extra.txt\n# note\nDjango==4.2.16\n")
+    assert versions == [(3, "Django", "4.2.16")]
+
+
+def _git(root: Path, args: list[str]) -> None:
+    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True)

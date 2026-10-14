@@ -12,8 +12,10 @@ from pathlib import Path
 
 from atlas.application.alerts import AlertError, evaluate, save_channel
 from atlas.application.lifecycle import diagnose, uninstall
+from atlas.application.scan import run_scan
 from atlas.cli.main import main
-from atlas.metrics.series import query_series, rollup_and_prune
+from atlas.collectors.view import open_view
+from atlas.metrics.series import enforce_metric_budget, query_series, rollup_and_prune
 from atlas.storage.db import Store
 
 
@@ -214,6 +216,57 @@ def test_log_filter_and_certificate_date(tmp_path: Path) -> None:
     plan = build_plan("image.prune", {})
     assert plan.argv == ("docker", "image", "prune", "--force")
     assert plan.confirm == "images"
+
+
+def test_fixture_matches_the_expected_facts(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parents[2] / "fixtures" / "partial-host"
+    expected = json.loads((fixture / "expected-facts.json").read_text(encoding="utf-8"))
+    store = Store.open(tmp_path / "atlas.db")
+    try:
+        scan_id = run_scan(open_view(fixture), store, "golden")
+        actual = sorted(
+            [row["subject"], row["predicate"], row["certainty"], row["value"]]
+            for row in store.facts(scan_id)
+        )
+    finally:
+        store.close()
+    assert actual == expected
+
+
+def test_export_writes_the_latest_scan(tmp_path: Path) -> None:
+    database = tmp_path / "atlas.db"
+    store = Store.open(database)
+    try:
+        _scan(store)
+    finally:
+        store.close()
+    output = tmp_path / "out" / "report"
+    assert main(["export", "--db", str(database), "--output", str(output), "--format", "json"]) == 0
+    assert output.with_suffix(".json").is_file()
+    empty = Store.open(tmp_path / "empty.db")
+    empty.close()
+    assert (
+        main(["export", "--db", str(tmp_path / "empty.db"), "--output", str(tmp_path / "none")])
+        == 1
+    )
+
+
+def test_metric_budget_drops_the_oldest_points(tmp_path: Path) -> None:
+    store = Store.open(tmp_path / "atlas.db")
+    try:
+        for index in range(5):
+            store.conn.execute(
+                "INSERT INTO metric_points (series, ts, value) VALUES ('host.load.1', ?, 1)",
+                (1_000 + index,),
+            )
+        store.conn.commit()
+        dropped = enforce_metric_budget(store.conn, limit_bytes=64 * 2)
+        store.conn.commit()
+        assert dropped == 3
+        left = store.conn.execute("SELECT ts FROM metric_points ORDER BY ts").fetchall()
+        assert [int(row["ts"]) for row in left] == [1003, 1004]
+    finally:
+        store.close()
 
 
 def test_oneshot_does_not_install_units(tmp_path: Path) -> None:

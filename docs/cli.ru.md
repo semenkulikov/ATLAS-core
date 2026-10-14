@@ -11,6 +11,7 @@
 | `atlas doctor --db <файл>` | Права файла и может ли канал оповещений уйти с хоста. |
 | `atlas expose` | Как можно открыть панель. |
 | `atlas user reset-2fa --db <файл>` | Новый секрет TOTP владельца. Только локально. |
+| `atlas export --db <файл>` | Последний завершённый снимок в Markdown, JSON и HTML. |
 | `atlas uninstall --prefix <путь> [--purge]` | Удаляет файлы продукта. База остаётся без `--purge`. |
 
 `atlas-helper --socket <путь> --uid <uid веб-процесса>` — процесс root. `serve` его не запускает.

@@ -6,7 +6,19 @@ from datetime import UTC, datetime
 
 import pytest
 
-from atlas.domain import Certainty, EvidenceKind, fact, file_evidence, unknown
+from atlas.domain import (
+    Certainty,
+    Evidence,
+    EvidenceKind,
+    Fact,
+    api_evidence,
+    command_evidence,
+    fact,
+    failed_collector,
+    file_evidence,
+    process_evidence,
+    unknown,
+)
 
 CANARY = "ATLAS_CANARY_7f3a9c"
 NOW = datetime(2026, 10, 14, tzinfo=UTC)
@@ -48,3 +60,23 @@ def test_evidence_and_values_mask_secrets() -> None:
     assert CANARY not in proof.excerpt
     assert CANARY not in stored.value
     assert len(proof.excerpt) <= 200
+
+
+def test_a_claim_without_a_subject_or_a_reference_is_refused() -> None:
+    proof = file_evidence("/etc/os-release", 1, "ID=ubuntu", sha256=None, collected_at=NOW)
+    with pytest.raises(ValueError, match="reference"):
+        Evidence(EvidenceKind.FILE, "", "ID=ubuntu", None, NOW)
+    with pytest.raises(ValueError, match="subject"):
+        Fact("host", "", "ubuntu", Certainty.FACT, (proof,), NOW)
+    with pytest.raises(ValueError, match="explains"):
+        unknown("host", "virt.type", "", collected_at=NOW)
+    with pytest.raises(ValueError, match="names its rule"):
+        Fact("host", "os.id", "ubuntu", Certainty.DERIVED, (proof,), NOW)
+    with pytest.raises(ValueError, match="has no rule"):
+        Fact("host", "os.id", "ubuntu", Certainty.FACT, (proof,), NOW, rule="guess")
+    assert command_evidence(["uname"], "Linux", collected_at=NOW).kind is EvidenceKind.COMMAND
+    assert api_evidence("/containers/json", "[]", collected_at=NOW).kind is EvidenceKind.API
+    assert process_evidence(1, "systemd", collected_at=NOW).kind is EvidenceKind.PROCESS
+    failed = failed_collector("os", "collector raised", NOW)
+    assert failed.facts[0].certainty is Certainty.UNKNOWN
+    assert failed.sources[0].status == "unavailable"

@@ -35,6 +35,10 @@
       {copy(lang, "filter")}
       <input class="mt-1 w-full rounded-md border border-graphite bg-void px-3 py-2 font-mono text-sm text-paper" name="q" />
     </label>
+    <label class="w-40 text-sm text-fog">
+      {copy(lang, "pattern")}
+      <input class="mt-1 w-full rounded-md border border-graphite bg-void px-3 py-2 font-mono text-sm text-paper" name="pattern" />
+    </label>
     <button class="self-end rounded-md bg-accent px-3 py-2 text-void" type="submit">{copy(lang, "show")}</button>
   </form>
   {#if message}

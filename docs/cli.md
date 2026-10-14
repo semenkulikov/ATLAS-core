@@ -11,6 +11,7 @@
 | `atlas doctor --db <file>` | File mode and whether an alert channel can leave the host. |
 | `atlas expose` | How the panel may be reached. |
 | `atlas user reset-2fa --db <file>` | New TOTP secret for the owner. Local only. |
+| `atlas export --db <file>` | Latest completed scan as Markdown, JSON, and HTML. |
 | `atlas uninstall --prefix <path> [--purge]` | Remove product files. The database stays unless `--purge`. |
 
 `atlas-helper --socket <path> --uid <web uid>` is the root process. It is not started by `serve`.
