@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ATLAS
+.tools/
+node_modules/
+frontend/dist/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.playwright-cli/
