@@ -182,3 +182,7 @@ def _write_reports(store: Store, scan_id: int, output: Path, formats: list[str])
         f"scan {scan_id} finished: {report['fact_count']} facts, {unavailable} sources unavailable\n"
     )
     sys.stdout.write("wrote " + ", ".join(written) + "\n")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
