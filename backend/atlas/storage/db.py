@@ -19,7 +19,7 @@ MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 def connect(path: Path) -> sqlite3.Connection:
     """Open the state database, apply migrations, and keep the file private."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -58,6 +58,50 @@ class Store:
 
     def close(self) -> None:
         self._conn.close()
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """The underlying connection. Callers that share it must tolerate other threads."""
+        return self._conn
+
+    def latest_scan_id(self) -> int | None:
+        """Return the newest succeeded scan, or ``None`` when nothing has completed."""
+        row = self._conn.execute(
+            "SELECT id FROM scans WHERE status = 'succeeded' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return None if row is None else int(row["id"])
+
+    def list_scans(self) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT id, started_at, finished_at, status, mode, error FROM scans ORDER BY id DESC"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def project(self, scan_id: int, project_id: str) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT project_id, name, root_path, fingerprint, anchor_kind, payload "
+            "FROM projects WHERE scan_id = ? AND project_id = ?",
+            (scan_id, project_id),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["payload"])
+        return {"kind": "project", "key": row["project_id"], "payload": payload}
+
+    def project_docs(self, scan_id: int, project_id: str) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT path, mtime, size, sha256, substr(body, 1, 4000) AS body "
+            "FROM docs WHERE scan_id = ? AND project_id = ? ORDER BY path",
+            (scan_id, project_id),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def edges(self, scan_id: int) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT src, dst, kind, evidence_ref FROM edges WHERE scan_id = ? ORDER BY id",
+            (scan_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def start_scan(self, mode: str) -> int:
         """Insert a scan row and return its id. The row stays ``running`` until finish."""

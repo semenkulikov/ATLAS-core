@@ -36,6 +36,24 @@ def main(argv: list[str] | None = None) -> int:
     manifest = sub.add_parser("manifest", help="Print the list of sources ATLAS reads")
     manifest.add_argument("--lang", choices=("en", "ru"), default="en")
     manifest.set_defaults(func=cmd_manifest)
+    serve = sub.add_parser("serve", help="Serve the panel API")
+    serve.add_argument("--db", required=True, help="SQLite file for scans and accounts.")
+    serve.add_argument("--root", default="/", help="Filesystem root the panel is allowed to read.")
+    serve.add_argument("--socket", default="", help="Unix socket path. Used when --tcp is omitted.")
+    serve.add_argument("--tcp", default="", help="Loopback address, for example 127.0.0.1:8765.")
+    serve.add_argument(
+        "--tls", action="store_true", help="Mark cookies Secure and allow a public bind."
+    )
+    serve.add_argument(
+        "--allow", action="append", default=[], help="Client IP allowed when binding publicly."
+    )
+    serve.add_argument("--host-name", action="append", default=[], help="Accepted Host header.")
+    serve.set_defaults(func=cmd_serve)
+    token = sub.add_parser("token", help="Manage one-time install tokens")
+    token_sub = token.add_subparsers(dest="token_command", required=True)
+    token_new = token_sub.add_parser("new", help="Print a one-time owner enrollment token")
+    token_new.add_argument("--db", required=True)
+    token_new.set_defaults(func=cmd_token_new)
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
@@ -62,6 +80,55 @@ def cmd_scan(args: argparse.Namespace) -> int:
             _write_reports(store, scan_id, Path(args.output), formats)
         finally:
             store.close()
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Start the API on a Unix socket, or on loopback when ``--tcp`` is set."""
+    import uvicorn
+
+    from atlas.api.app import create_app
+    from atlas.api.settings import Settings, refuse_public_bind
+
+    db_path = Path(args.db)
+    store = Store.open(db_path)
+    hosts = tuple(args.host_name) or ("127.0.0.1", "localhost")
+    if args.tcp:
+        host, _, port_text = args.tcp.rpartition(":")
+        if not host or not port_text.isdigit():
+            sys.stderr.write("Use --tcp 127.0.0.1:PORT.\n")
+            return 2
+        refuse_public_bind(host, tls=bool(args.tls), allowed_ips=tuple(args.allow))
+        settings = Settings(
+            Path(args.root),
+            tls=bool(args.tls),
+            allowed_hosts=hosts,
+            allowed_ips=tuple(args.allow),
+            public_bind=host not in {"127.0.0.1", "localhost", "::1"},
+        )
+        uvicorn.run(create_app(store, settings), host=host, port=int(port_text), log_config=None)
+        return 0
+    socket_path = args.socket or "/run/atlas/web.sock"
+    settings = Settings(Path(args.root), tls=bool(args.tls), allowed_hosts=hosts)
+    uvicorn.run(create_app(store, settings), uds=socket_path, log_config=None)
+    return 0
+
+
+def cmd_token_new(args: argparse.Namespace) -> int:
+    """Print a one-time enrollment token. It is not stored in the clear."""
+    from datetime import UTC, datetime
+
+    from atlas.security.accounts import AccessError, issue_bootstrap
+
+    store = Store.open(Path(args.db))
+    try:
+        token = issue_bootstrap(store.conn, now=datetime.now(UTC), ttl_seconds=15 * 60)
+    except AccessError as exc:
+        sys.stderr.write(exc.message + "\n")
+        return 1
+    finally:
+        store.close()
+    sys.stdout.write(token + "\n")
     return 0
 
 

@@ -20,4 +20,11 @@ uv run --project backend python -m atlas.cli.main manifest --lang ru
 
 The metrics sampler is replaceable. See [the collector-language note](docs/adr/0001-collector-language.md).
 
+The panel API listens on a Unix socket. `atlas token new` prints a one-time enrollment token; the first account needs that token, a password, and a TOTP code. A TCP listener is off unless you pass `--tcp`, and a public address is refused without TLS and an address allow list.
+
+```bash
+uv run --project backend python -m atlas.cli.main token new --db /tmp/atlas.db
+uv run --project backend python -m atlas.cli.main serve --db /tmp/atlas.db --root fixtures/partial-host --tcp 127.0.0.1:8765
+```
+
 License: Apache-2.0.

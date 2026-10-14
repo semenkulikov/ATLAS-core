@@ -20,4 +20,11 @@ uv run --project backend python -m atlas.cli.main manifest --lang ru
 
 Сборщик метрик можно заменить. См. [заметку о языке сборщика](docs/adr/0001-collector-language.md).
 
+API панели слушает Unix-сокет. `atlas token new` печатает одноразовый токен: первая учётная запись создаётся им, паролем и кодом TOTP. TCP выключен, пока не передан `--tcp`, а публичный адрес без TLS и списка разрешённых адресов отклоняется.
+
+```bash
+uv run --project backend python -m atlas.cli.main token new --db /tmp/atlas.db
+uv run --project backend python -m atlas.cli.main serve --db /tmp/atlas.db --root fixtures/partial-host --tcp 127.0.0.1:8765
+```
+
 Лицензия: Apache-2.0.
