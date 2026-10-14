@@ -1,0 +1,24 @@
+{
+  "containers": [
+    {
+      "Id": "abc123def456",
+      "Names": ["/shop-web"],
+      "Image": "shop:1",
+      "State": "running",
+      "Status": "Up 2 hours",
+      "Ports": [{"PrivatePort": 8000, "Type": "tcp"}],
+      "Labels": {
+        "com.docker.compose.project": "shop",
+        "com.docker.compose.project.working_dir": "/opt/shop"
+      },
+      "HostConfig": {
+        "RestartPolicy": {"Name": "unless-stopped"},
+        "Binds": ["/opt/shop:/app"]
+      },
+      "Mounts": [{"Type": "bind", "Source": "/opt/shop", "Destination": "/app"}]
+    }
+  ],
+  "images": [{"Id": "sha256:fff", "RepoTags": ["shop:1"], "Size": 1024}],
+  "networks": [{"Name": "shop_default", "Driver": "bridge"}],
+  "volumes": {"Volumes": [{"Name": "shop_data", "Mountpoint": "/var/lib/docker/volumes/shop_data"}]}
+}

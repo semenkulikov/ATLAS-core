@@ -1,0 +1,26 @@
+{
+  "uname -s -r -m -n": {
+    "code": 0,
+    "stdout": "Linux 6.8.0-45-generic x86_64 web-1\n"
+  },
+  "systemd-detect-virt": {
+    "code": 0,
+    "stdout": "kvm\n"
+  },
+  "ip -j addr": {
+    "code": 0,
+    "stdout": "[{\"ifname\": \"eth0\", \"addr_info\": [{\"family\": \"inet\", \"local\": \"203.0.113.10\", \"prefixlen\": 24}]}]\n"
+  },
+  "ip -j route": {
+    "code": 0,
+    "stdout": "[{\"dst\": \"default\", \"gateway\": \"203.0.113.1\", \"dev\": \"eth0\"}]\n"
+  },
+  "systemctl show --type=service --all --no-pager": {
+    "code": 0,
+    "stdout": "Id=nginx.service\nActiveState=active\nSubState=running\nUnitFileState=enabled\nDescription=Nginx HTTP server\n\nId=shop.service\nActiveState=active\nSubState=running\nUnitFileState=disabled\nDescription=Shop application\n\n"
+  },
+  "python3 --version": {
+    "code": 0,
+    "stdout": "Python 3.12.3\n"
+  }
+}

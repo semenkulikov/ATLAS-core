@@ -16,6 +16,9 @@ dependencies = [
     "uvicorn>=0.32.0",
 ]
 
+[project.scripts]
+atlas = "atlas.cli.main:main"
+
 [dependency-groups]
 dev = [
     "bandit>=1.8.0",

@@ -1,0 +1,11 @@
+[Unit]
+Description=Shop application
+
+[Service]
+ExecStart=/opt/shop/.venv/bin/gunicorn shop.wsgi
+WorkingDirectory=/opt/shop
+User=deploy
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
