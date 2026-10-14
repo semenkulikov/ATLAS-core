@@ -92,6 +92,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     db_path = Path(args.db)
     store = Store.open(db_path)
+    _start_sampler(store)
     hosts = tuple(args.host_name) or ("127.0.0.1", "localhost")
     if args.tcp:
         host, _, port_text = args.tcp.rpartition(":")
@@ -112,6 +113,33 @@ def cmd_serve(args: argparse.Namespace) -> int:
     settings = Settings(Path(args.root), tls=bool(args.tls), allowed_hosts=hosts)
     uvicorn.run(create_app(store, settings), uds=socket_path, log_config=None)
     return 0
+
+
+def _start_sampler(store: Store) -> None:
+    """Record one sample immediately, then one every 10 seconds, while serve runs."""
+    import threading
+    import time
+
+    from atlas.logging import get_logger
+    from atlas.metrics.sampler import default_sampler
+    from atlas.metrics.series import write_sample
+
+    sampler = default_sampler()
+    logger = get_logger("atlas.metrics")
+
+    def once() -> None:
+        try:
+            write_sample(store.conn, sampler.sample())
+        except Exception:
+            logger.exception("metrics.sample_failed")
+
+    def loop() -> None:
+        while True:
+            time.sleep(10)
+            once()
+
+    once()
+    threading.Thread(target=loop, name="atlas-metrics", daemon=True).start()
 
 
 def cmd_token_new(args: argparse.Namespace) -> int:
