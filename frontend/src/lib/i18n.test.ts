@@ -50,6 +50,10 @@ describe("panel copy", () => {
       actor: "",
       action: "",
       result: "",
+      restart: "",
+      typeToConfirm: "",
+      saved: "",
+      channelsOff: "",
     }) as CopyKey[];
     for (const key of keys) {
       expect(copy("en", key).length).toBeGreaterThan(0);

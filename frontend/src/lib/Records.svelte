@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionDialog from "./ActionDialog.svelte";
   import Facts from "./Facts.svelte";
   import { api, type Entity, type Fact } from "./api";
   import { copy, type Lang } from "./i18n";
@@ -8,12 +9,20 @@
     path,
     detail,
     onopen,
-  }: { lang: Lang; path: string; detail: string | null; onopen: (id: number) => void } = $props();
+    canAct = false,
+  }: {
+    lang: Lang;
+    path: string;
+    detail: string | null;
+    onopen: (id: number) => void;
+    canAct?: boolean;
+  } = $props();
   let items = $state<Entity[]>([]);
   let next = $state<string | null>(null);
   let selected = $state<Entity | null>(null);
   let facts = $state<Fact[]>([]);
   let message = $state("");
+  let pendingOp = $state<string | null>(null);
 
   async function load(cursor = ""): Promise<void> {
     const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
@@ -86,9 +95,28 @@
           <p class="mb-1 text-xs"><span class="text-ash">{key}</span> <span class="text-mist">{show(value)}</span></p>
         {/each}
         <Facts {facts} {lang} {onopen} />
+        {#if canAct && path.endsWith("/services")}
+          <button type="button" class="mt-3 text-sm text-accent" onclick={() => (pendingOp = "service.restart")}>
+            {copy(lang, "restart")}
+          </button>
+        {/if}
+        {#if canAct && path.endsWith("/containers")}
+          <button type="button" class="mt-3 text-sm text-accent" onclick={() => (pendingOp = "container.restart")}>
+            {copy(lang, "restart")}
+          </button>
+        {/if}
       </aside>
     {/if}
   </div>
+  {#if pendingOp && selected}
+    <ActionDialog
+      {lang}
+      op={pendingOp}
+      objectName={selected.key}
+      risk="medium"
+      onclose={() => (pendingOp = null)}
+    />
+  {/if}
   {#if next}
     <button type="button" class="mt-3 text-sm text-fog" onclick={() => load(next ?? "")}>{copy(lang, "loadMore")}</button>
   {/if}

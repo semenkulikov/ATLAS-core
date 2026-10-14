@@ -41,6 +41,56 @@ def write_sample(conn: sqlite3.Connection, sample: HostSample) -> None:
     conn.commit()
 
 
+def rollup_and_prune(conn: sqlite3.Connection, *, now: int) -> int:
+    """Fold old raw points into rollups and drop what is past the retention window.
+
+    Raw points last 24 hours, one-minute rollups last 30 days, and five-minute
+    rollups last 365 days. Returns the number of raw points removed.
+    """
+    day = 24 * 60 * 60
+    month = 30 * day
+    year = 365 * day
+    _fold(conn, source="metric_points", step=60, older_than=now - day)
+    removed = conn.execute("DELETE FROM metric_points WHERE ts < ?", (now - day,)).rowcount
+    _fold_rollups(conn, source_step=60, step=300, older_than=now - month)
+    conn.execute("DELETE FROM metric_rollups WHERE step = 60 AND ts < ?", (now - month,))
+    conn.execute("DELETE FROM metric_rollups WHERE step = 300 AND ts < ?", (now - year,))
+    conn.commit()
+    return int(removed)
+
+
+def _fold(conn: sqlite3.Connection, *, source: str, step: int, older_than: int) -> None:
+    if source != "metric_points":
+        raise ValueError("unknown metric table")
+    rows = conn.execute(
+        "SELECT series, ts, value FROM metric_points WHERE ts < ? ORDER BY series, ts",
+        (older_than,),
+    ).fetchall()
+    _write_buckets(conn, rows, step)
+
+
+def _fold_rollups(
+    conn: sqlite3.Connection, *, source_step: int, step: int, older_than: int
+) -> None:
+    rows = conn.execute(
+        "SELECT series, ts, value FROM metric_rollups WHERE step = ? AND ts < ? ORDER BY series, ts",
+        (source_step, older_than),
+    ).fetchall()
+    _write_buckets(conn, rows, step)
+
+
+def _write_buckets(conn: sqlite3.Connection, rows: list[sqlite3.Row], step: int) -> None:
+    buckets: dict[tuple[str, int], list[float]] = {}
+    for row in rows:
+        bucket = int(row["ts"]) - (int(row["ts"]) % step)
+        buckets.setdefault((str(row["series"]), bucket), []).append(float(row["value"]))
+    conn.executemany(
+        "INSERT INTO metric_rollups (series, step, ts, value) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(series, step, ts) DO UPDATE SET value = excluded.value",
+        [(series, step, ts, sum(values) / len(values)) for (series, ts), values in buckets.items()],
+    )
+
+
 def query_series(
     conn: sqlite3.Connection, series: str, start: int, end: int, step: int
 ) -> list[dict[str, float | int]]:
@@ -53,6 +103,13 @@ def query_series(
         "SELECT ts, value FROM metric_points WHERE series = ? AND ts >= ? AND ts <= ? ORDER BY ts",
         (series, start, end),
     ).fetchall()
+    if not rows and step > 1:
+        rollup_step = 300 if step >= 300 else 60
+        rows = conn.execute(
+            "SELECT ts, value FROM metric_rollups WHERE series = ? AND step = ? "
+            "AND ts >= ? AND ts <= ? ORDER BY ts",
+            (series, rollup_step, start, end),
+        ).fetchall()
     if step == 1:
         return [{"ts": int(row["ts"]), "value": float(row["value"])} for row in rows]
     buckets: dict[int, list[float]] = {}

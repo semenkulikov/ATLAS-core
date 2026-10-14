@@ -57,6 +57,12 @@ def run_scan(
         store.persist(scan_id, results)
         store.save_discovery(scan_id, found)
         store.finish_scan(scan_id, "succeeded")
+        try:
+            from atlas.application.alerts import evaluate
+
+            evaluate(store)
+        except Exception:
+            logger.exception("alerts.evaluate_failed")
     except Exception as exc:
         store.finish_scan(scan_id, "failed", exc.__class__.__name__)
         raise

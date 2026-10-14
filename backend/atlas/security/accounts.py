@@ -13,7 +13,13 @@ from datetime import datetime, timedelta
 from typing import cast
 
 from atlas.security.passwords import hash_password, verify_password
-from atlas.security.tokens import hash_token, new_token, new_totp_secret, verify_totp
+from atlas.security.tokens import (
+    hash_token,
+    new_token,
+    new_totp_secret,
+    provisioning_uri,
+    verify_totp,
+)
 
 _REJECTED = "The username, password, or second factor was not accepted."
 _LOCK_AFTER = 8
@@ -253,6 +259,23 @@ def issue_api_token(
     )
     conn.commit()
     return raw
+
+
+def reset_owner_totp(conn: sqlite3.Connection, username: str) -> str:
+    """Replace the owner's TOTP secret and return the new provisioning URI.
+
+    This is a local recovery command. It does not accept a request from the panel.
+    """
+    row = conn.execute(
+        "SELECT role FROM accounts WHERE username = ?",
+        (username,),
+    ).fetchone()
+    if row is None or row["role"] != "owner":
+        raise AccessError("auth.rejected", "That owner account is not in this database.")
+    secret = new_totp_secret()
+    conn.execute("UPDATE accounts SET totp_secret = ? WHERE username = ?", (secret, username))
+    conn.commit()
+    return provisioning_uri(secret, username)
 
 
 def _store_enrollment(

@@ -63,6 +63,10 @@ const en = {
   actor: "Actor",
   action: "Action",
   result: "Result",
+  restart: "Restart",
+  typeToConfirm: "Type the name to confirm",
+  saved: "Recorded",
+  channelsOff: "Alert channels are off. Nothing is sent off this host.",
 };
 
 const ru: typeof en = {
@@ -112,6 +116,10 @@ const ru: typeof en = {
   actor: "Кто",
   action: "Действие",
   result: "Результат",
+  restart: "Перезапустить",
+  typeToConfirm: "Введите имя для подтверждения",
+  saved: "Записано",
+  channelsOff: "Каналы оповещений выключены. Наружу ничего не уходит.",
 };
 
 const dictionaries = { en, ru };

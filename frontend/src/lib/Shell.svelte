@@ -113,10 +113,10 @@
         <Projects {lang} onopen={openFact} />
       {:else if route === "services"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "services")}</h1>
-        <Records {lang} path="/api/v1/services" detail="/api/v1/services" onopen={openFact} />
+        <Records {lang} path="/api/v1/services" detail="/api/v1/services" onopen={openFact} canAct={account.role !== "viewer"} />
       {:else if route === "containers"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "containers")}</h1>
-        <Records {lang} path="/api/v1/containers" detail={null} onopen={openFact} />
+        <Records {lang} path="/api/v1/containers" detail={null} onopen={openFact} canAct={account.role !== "viewer"} />
       {:else if route === "network"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "network")}</h1>
         <Records {lang} path="/api/v1/ports" detail={null} onopen={openFact} />
@@ -132,7 +132,7 @@
       {:else if route === "audit"}
         <Audit {lang} />
       {:else if route === "settings"}
-        <Settings {lang} />
+        <Settings {lang} role={account.role} />
       {:else}
         <section>
           <h1 class="mb-4 text-2xl text-paper">{copy(lang, route)}</h1>

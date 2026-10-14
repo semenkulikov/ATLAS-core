@@ -1,0 +1,26 @@
+[Unit]
+Description=ATLAS inventory panel
+After=network.target
+
+[Service]
+Type=simple
+User=atlas
+Group=atlas
+ExecStart=/opt/atlas/.venv/bin/atlas serve --db /var/lib/atlas/atlas.db --root / --helper-socket /run/atlas/helper.sock
+RuntimeDirectory=atlas
+StateDirectory=atlas
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/atlas /run/atlas
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=256M
+CPUQuota=25%
+TasksMax=128
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

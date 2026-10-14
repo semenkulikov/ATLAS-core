@@ -34,4 +34,10 @@ npm install --prefix frontend
 npm run build --prefix frontend
 ```
 
+Каналы оповещений выключены, пока владелец их не включит. `atlas doctor --db <файл>` показывает права файла и то, может ли канал уйти с хоста. `atlas status` печатает версию. `atlas expose` печатает правила слушателя. `atlas uninstall --prefix <путь>` удаляет файлы продукта и оставляет базу, если не передан `--purge`.
+
+`packaging/install.sh` создаёт `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas` и юниты systemd. Релиз он не скачивает. Аргумент `--url` завершает скрипт с ошибкой, пока нет подписанного архива.
+
+Модель безопасности: [docs/security-model.ru.md](docs/security-model.ru.md). Детекторы: [docs/detectors.ru.md](docs/detectors.ru.md). Список читаемых путей печатает `atlas manifest`.
+
 Лицензия: Apache-2.0.

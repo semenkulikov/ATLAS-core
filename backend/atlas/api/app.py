@@ -18,7 +18,19 @@ from fastapi.staticfiles import StaticFiles
 
 from atlas.api.problems import Problem, problem_response
 from atlas.api.settings import Settings
-from atlas.application.actions import ActionError, control_enabled, request_action, restart_risks
+from atlas.application.actions import (
+    ActionError,
+    control_enabled,
+    request_action,
+    restart_risks,
+    scanned_hostname,
+)
+from atlas.application.alerts import (
+    AlertError,
+    list_channels,
+    list_events,
+    save_channel,
+)
 from atlas.application.audit import list_audit, verify_chain
 from atlas.application.logs import LogError, read_log
 from atlas.application.report import build_report, render_html, render_json, render_markdown
@@ -116,6 +128,8 @@ def create_app(
     app.add_api_route("/api/v1/control", control_status, methods=["GET"])
     app.add_api_route("/api/v1/audit", audit_log, methods=["GET"])
     app.add_api_route("/api/v1/actions/{op}", perform_action, methods=["POST"])
+    app.add_api_route("/api/v1/alerts", alerts, methods=["GET"])
+    app.add_api_route("/api/v1/alerts/channels", create_channel, methods=["POST"])
     app.add_api_websocket_route("/api/v1/stream", stream)
     _mount_panel(app)
     return app
@@ -282,7 +296,11 @@ async def control_status(request: Request) -> Response:
     state = _state(request)
     return _json(
         request,
-        {"enabled": control_enabled(state.store), "risks": restart_risks(state.store)},
+        {
+            "enabled": control_enabled(state.store),
+            "risks": restart_risks(state.store),
+            "hostname": scanned_hostname(state.store),
+        },
     )
 
 
@@ -293,6 +311,31 @@ async def audit_log(request: Request) -> Response:
         request,
         {"items": list_audit(state.store.conn), "intact": verify_chain(state.store.conn)},
     )
+
+
+async def alerts(request: Request) -> Response:
+    _require(request, _READ)
+    state = _state(request)
+    return _json(
+        request,
+        {"events": list_events(state.store.conn), "channels": list_channels(state.store.conn)},
+    )
+
+
+async def create_channel(request: Request) -> Response:
+    actor = _require(request, _ADMIN)
+    _csrf(request, actor)
+    body = await _body(request)
+    try:
+        save_channel(
+            _state(request).store.conn,
+            str(body.get("kind") or ""),
+            str(body.get("target") or ""),
+            enabled=body.get("enabled") is True,
+        )
+    except AlertError as exc:
+        raise Problem(400, exc.message, "alert.channel") from exc
+    return _json(request, {"status": "saved"})
 
 
 async def perform_action(request: Request, op: str) -> Response:

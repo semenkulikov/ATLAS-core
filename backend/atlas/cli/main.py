@@ -65,6 +65,24 @@ def main(argv: list[str] | None = None) -> int:
     token_new = token_sub.add_parser("new", help="Print a one-time owner enrollment token")
     token_new.add_argument("--db", required=True)
     token_new.set_defaults(func=cmd_token_new)
+    status = sub.add_parser("status", help="Show the version, control switch, and latest scan")
+    status.add_argument("--db", required=True)
+    status.set_defaults(func=cmd_status)
+    doctor = sub.add_parser("doctor", help="Check file permissions and outbound alert channels")
+    doctor.add_argument("--db", required=True)
+    doctor.set_defaults(func=cmd_doctor)
+    reset = sub.add_parser("user", help="Local account recovery")
+    reset_sub = reset.add_subparsers(dest="user_command", required=True)
+    reset_2fa = reset_sub.add_parser("reset-2fa", help="Replace the owner TOTP secret")
+    reset_2fa.add_argument("--db", required=True)
+    reset_2fa.add_argument("--username", default="owner")
+    reset_2fa.set_defaults(func=cmd_reset_2fa)
+    expose = sub.add_parser("expose", help="Show how the panel may be reached")
+    expose.set_defaults(func=cmd_expose)
+    uninstall = sub.add_parser("uninstall", help="Remove ATLAS files under a prefix")
+    uninstall.add_argument("--prefix", default="/")
+    uninstall.add_argument("--purge", action="store_true")
+    uninstall.set_defaults(func=cmd_uninstall)
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
@@ -139,14 +157,16 @@ def _start_sampler(store: Store) -> None:
 
     from atlas.logging import get_logger
     from atlas.metrics.sampler import default_sampler
-    from atlas.metrics.series import write_sample
+    from atlas.metrics.series import rollup_and_prune, write_sample
 
     sampler = default_sampler()
     logger = get_logger("atlas.metrics")
 
     def once() -> None:
         try:
-            write_sample(store.conn, sampler.sample())
+            sample = sampler.sample()
+            write_sample(store.conn, sample)
+            rollup_and_prune(store.conn, now=int(sample.collected_at))
         except Exception:
             logger.exception("metrics.sample_failed")
 
@@ -200,6 +220,76 @@ def cmd_control(args: argparse.Namespace) -> int:
     finally:
         store.close()
     sys.stdout.write("control on\n" if enabled else "control off\n")
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Print the product version and whether control is on."""
+    from atlas import __version__
+    from atlas.application.actions import control_enabled
+
+    store = Store.open(Path(args.db))
+    try:
+        scan_id = store.latest_scan_id()
+        state = "on" if control_enabled(store) else "off"
+    finally:
+        store.close()
+    sys.stdout.write(f"atlas {__version__}\ncontrol {state}\nlatest scan {scan_id}\n")
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Print checks. Exit 1 when a finding is unsafe."""
+    from atlas.application.lifecycle import diagnose
+
+    database = Path(args.db)
+    observed = database.stat().st_mode & 0o777
+    store = Store.open(database)
+    try:
+        notes = diagnose(store, database, observed_mode=observed)
+    finally:
+        store.close()
+    sys.stdout.write("\n".join(notes) + "\n")
+    return 1 if any(note.startswith("warning:") for note in notes) else 0
+
+
+def cmd_reset_2fa(args: argparse.Namespace) -> int:
+    """Print a new TOTP provisioning URI for the owner. The old secret stops working."""
+    from atlas.security.accounts import AccessError, reset_owner_totp
+
+    store = Store.open(Path(args.db))
+    try:
+        uri = reset_owner_totp(store.conn, args.username)
+    except AccessError as exc:
+        sys.stderr.write(exc.message + "\n")
+        return 1
+    finally:
+        store.close()
+    sys.stdout.write(uri + "\n")
+    return 0
+
+
+def cmd_expose(_args: argparse.Namespace) -> int:
+    """Print the supported ways to reach the panel."""
+    sys.stdout.write(
+        "Default listener: unix socket /run/atlas/web.sock\n"
+        "Loopback TCP: atlas serve --tcp 127.0.0.1:8765\n"
+        "A public address starts only with --tls and at least one --allow address.\n"
+    )
+    return 0
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    """Remove product files. The database stays unless --purge is set."""
+    import subprocess  # nosec B404
+
+    from atlas.application.lifecycle import uninstall
+
+    def run(argv: list[str]) -> None:
+        subprocess.run(argv, check=False)  # nosec B603
+
+    removed = uninstall(Path(args.prefix), purge=bool(args.purge), run=run)
+    sys.stdout.write("removed " + (", ".join(removed) if removed else "nothing") + "\n")
     return 0
 
 
