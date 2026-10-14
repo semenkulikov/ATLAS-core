@@ -42,6 +42,14 @@ describe("panel copy", () => {
       exposed: "",
       local: "",
       role: "",
+      controlOn: "",
+      risks: "",
+      intact: "",
+      broken: "",
+      when: "",
+      actor: "",
+      action: "",
+      result: "",
     }) as CopyKey[];
     for (const key of keys) {
       expect(copy("en", key).length).toBeGreaterThan(0);

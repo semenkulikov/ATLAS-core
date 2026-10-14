@@ -48,7 +48,18 @@ def main(argv: list[str] | None = None) -> int:
         "--allow", action="append", default=[], help="Client IP allowed when binding publicly."
     )
     serve.add_argument("--host-name", action="append", default=[], help="Accepted Host header.")
+    serve.add_argument(
+        "--helper-socket",
+        default="",
+        help="Unix socket of the root helper. Empty means control calls are refused.",
+    )
     serve.set_defaults(func=cmd_serve)
+    control = sub.add_parser("control", help="Turn host control on or off")
+    control_sub = control.add_subparsers(dest="control_command", required=True)
+    for name in ("enable", "disable"):
+        item = control_sub.add_parser(name)
+        item.add_argument("--db", required=True)
+        item.set_defaults(func=cmd_control)
     token = sub.add_parser("token", help="Manage one-time install tokens")
     token_sub = token.add_subparsers(dest="token_command", required=True)
     token_new = token_sub.add_parser("new", help="Print a one-time owner enrollment token")
@@ -106,11 +117,17 @@ def cmd_serve(args: argparse.Namespace) -> int:
             allowed_hosts=hosts,
             allowed_ips=tuple(args.allow),
             public_bind=host not in {"127.0.0.1", "localhost", "::1"},
+            helper_socket=args.helper_socket,
         )
         uvicorn.run(create_app(store, settings), host=host, port=int(port_text), log_config=None)
         return 0
     socket_path = args.socket or "/run/atlas/web.sock"
-    settings = Settings(Path(args.root), tls=bool(args.tls), allowed_hosts=hosts)
+    settings = Settings(
+        Path(args.root),
+        tls=bool(args.tls),
+        allowed_hosts=hosts,
+        helper_socket=args.helper_socket,
+    )
     uvicorn.run(create_app(store, settings), uds=socket_path, log_config=None)
     return 0
 
@@ -157,6 +174,32 @@ def cmd_token_new(args: argparse.Namespace) -> int:
     finally:
         store.close()
     sys.stdout.write(token + "\n")
+    return 0
+
+
+def cmd_control(args: argparse.Namespace) -> int:
+    """Turn the control switch on or off and record that in the audit chain."""
+    from datetime import UTC, datetime
+
+    from atlas.application.actions import set_control
+    from atlas.application.audit import append_audit
+
+    enabled = args.control_command == "enable"
+    store = Store.open(Path(args.db))
+    try:
+        set_control(store, enabled)
+        append_audit(
+            store.conn,
+            actor="cli",
+            ip="local",
+            action="control.enable" if enabled else "control.disable",
+            params={},
+            result="ok",
+            now=datetime.now(UTC),
+        )
+    finally:
+        store.close()
+    sys.stdout.write("control on\n" if enabled else "control off\n")
     return 0
 
 

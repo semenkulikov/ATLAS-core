@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Audit from "./Audit.svelte";
   import Changes from "./Changes.svelte";
+  import Settings from "./Settings.svelte";
   import EvidenceDrawer from "./EvidenceDrawer.svelte";
   import Logs from "./Logs.svelte";
   import Monitor from "./Monitor.svelte";
@@ -127,6 +129,10 @@
         <Logs {lang} />
       {:else if route === "changes"}
         <Changes {lang} />
+      {:else if route === "audit"}
+        <Audit {lang} />
+      {:else if route === "settings"}
+        <Settings {lang} />
       {:else}
         <section>
           <h1 class="mb-4 text-2xl text-paper">{copy(lang, route)}</h1>

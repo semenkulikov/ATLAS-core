@@ -18,6 +18,8 @@ from fastapi.staticfiles import StaticFiles
 
 from atlas.api.problems import Problem, problem_response
 from atlas.api.settings import Settings
+from atlas.application.actions import ActionError, control_enabled, request_action, restart_risks
+from atlas.application.audit import list_audit, verify_chain
 from atlas.application.logs import LogError, read_log
 from atlas.application.report import build_report, render_html, render_json, render_markdown
 from atlas.application.scan import run_scan
@@ -111,6 +113,9 @@ def create_app(
     app.add_api_route("/api/v1/metrics/query", metrics, methods=["GET"])
     app.add_api_route("/api/v1/logs", logs, methods=["GET"])
     app.add_api_route("/api/v1/export", export, methods=["GET"])
+    app.add_api_route("/api/v1/control", control_status, methods=["GET"])
+    app.add_api_route("/api/v1/audit", audit_log, methods=["GET"])
+    app.add_api_route("/api/v1/actions/{op}", perform_action, methods=["POST"])
     app.add_api_websocket_route("/api/v1/stream", stream)
     _mount_panel(app)
     return app
@@ -270,6 +275,54 @@ async def create_token(request: Request) -> Response:
     except AccessError as exc:
         raise _access(exc) from exc
     return _json(request, {"token": raw, "scope": scope})
+
+
+async def control_status(request: Request) -> Response:
+    _require(request, _READ)
+    state = _state(request)
+    return _json(
+        request,
+        {"enabled": control_enabled(state.store), "risks": restart_risks(state.store)},
+    )
+
+
+async def audit_log(request: Request) -> Response:
+    _require(request, _ADMIN)
+    state = _state(request)
+    return _json(
+        request,
+        {"items": list_audit(state.store.conn), "intact": verify_chain(state.store.conn)},
+    )
+
+
+async def perform_action(request: Request, op: str) -> Response:
+    actor = _require(request, _READ)
+    _csrf(request, actor)
+    state = _state(request)
+    body = await _body(request)
+    raw_params = body.get("params")
+    params = raw_params if isinstance(raw_params, dict) else {}
+    client = request.client.host if request.client else ""
+    try:
+        outcome = request_action(
+            state.store,
+            username=actor.username,
+            role=actor.role,
+            ip=client,
+            op=op,
+            params=params,
+            confirm=str(body.get("confirm") or ""),
+            code=str(body.get("code") or ""),
+            helper_socket=state.settings.helper_socket,
+            now=state.clock(),
+        )
+    except ActionError as exc:
+        raise Problem(exc.status, exc.message, exc.code) from exc
+    status = 200 if outcome.get("ok") else 409
+    encoded = json.dumps(outcome, sort_keys=True, default=str).encode("utf-8")
+    return Response(
+        encoded, status_code=status, media_type="application/json", headers=_SECURITY_HEADERS
+    )
 
 
 async def openapi(request: Request) -> Response:

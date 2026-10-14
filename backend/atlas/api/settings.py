@@ -17,6 +17,7 @@ class Settings:
     session_idle_seconds: int = 30 * 60
     bootstrap_ttl_seconds: int = 15 * 60
     public_bind: bool = False
+    helper_socket: str = ""
 
 
 def refuse_public_bind(host: str, *, tls: bool, allowed_ips: tuple[str, ...]) -> None:

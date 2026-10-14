@@ -55,6 +55,14 @@ const en = {
   exposed: "Reachable",
   local: "Local",
   role: "Role",
+  controlOn: "Control is on. Each action is sent to the root helper and written to the audit chain.",
+  risks: "Running, and will not return after a reboot",
+  intact: "The audit chain matches.",
+  broken: "The audit chain does not match. Treat this log as untrustworthy.",
+  when: "When",
+  actor: "Actor",
+  action: "Action",
+  result: "Result",
 };
 
 const ru: typeof en = {
@@ -96,6 +104,14 @@ const ru: typeof en = {
   exposed: "Снаружи",
   local: "Локально",
   role: "Роль",
+  controlOn: "Управление включено. Каждое действие уходит root-помощнику и попадает в журнал.",
+  risks: "Работает и не вернётся после перезагрузки",
+  intact: "Цепочка журнала сходится.",
+  broken: "Цепочка журнала не сходится. Этой записи нельзя доверять.",
+  when: "Когда",
+  actor: "Кто",
+  action: "Действие",
+  result: "Результат",
 };
 
 const dictionaries = { en, ru };

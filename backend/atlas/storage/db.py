@@ -44,6 +44,7 @@ def apply_migrations(conn: sqlite3.Connection) -> None:
             "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
             (path.name, datetime.now(UTC).isoformat()),
         )
+        conn.commit()
 
 
 class Store:

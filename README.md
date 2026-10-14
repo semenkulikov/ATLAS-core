@@ -20,7 +20,7 @@ uv run --project backend python -m atlas.cli.main manifest --lang ru
 
 The metrics sampler is replaceable. See [the collector-language note](docs/adr/0001-collector-language.md).
 
-The panel API listens on a Unix socket. `atlas token new` prints a one-time enrollment token; the first account needs that token, a password, and a TOTP code. A TCP listener is off unless you pass `--tcp`, and a public address is refused without TLS and an address allow list.
+The panel API listens on a Unix socket. `atlas token new` prints a one-time enrollment token; the first account needs that token, a password, and a TOTP code. A TCP listener is off unless you pass `--tcp`, and a public address is refused without TLS and an address allow list. Host control stays off until `atlas control enable` is run against the same database. The panel then asks a separate root helper, and it does not run those commands itself.
 
 ```bash
 uv run --project backend python -m atlas.cli.main token new --db /tmp/atlas.db
