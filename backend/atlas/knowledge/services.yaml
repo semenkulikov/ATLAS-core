@@ -1,0 +1,32 @@
+nginx:
+  name: nginx
+  summary_en: HTTP server and reverse proxy.
+  summary_ru: HTTP-сервер и обратный прокси.
+sshd:
+  name: sshd
+  summary_en: Remote login over SSH.
+  summary_ru: Удалённый вход по SSH.
+postgresql:
+  name: PostgreSQL
+  summary_en: Relational database. ATLAS does not connect to it.
+  summary_ru: Реляционная база. ATLAS к ней не подключается.
+redis:
+  name: Redis
+  summary_en: In-memory data store. ATLAS does not connect to it.
+  summary_ru: Хранилище в памяти. ATLAS к нему не подключается.
+fail2ban:
+  name: fail2ban
+  summary_en: Bans hosts that fail authentication too often.
+  summary_ru: Блокирует адреса после повторных ошибок аутентификации.
+docker:
+  name: Docker
+  summary_en: Container engine. The socket is read by the privileged helper.
+  summary_ru: Движок контейнеров. Сокет читает привилегированный помощник.
+caddy:
+  name: Caddy
+  summary_en: HTTP server with automatic TLS.
+  summary_ru: HTTP-сервер с автоматическим TLS.
+cron:
+  name: cron
+  summary_en: Runs scheduled commands.
+  summary_ru: Запускает команды по расписанию.

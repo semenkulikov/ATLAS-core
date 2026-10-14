@@ -32,6 +32,7 @@ _KINDS = (
 def build_report(store: Store, scan_id: int) -> dict[str, Any]:
     """Assemble the export document for one scan."""
     sections = {kind: store.entities(scan_id, kind) for kind in _KINDS}
+    sections["project"] = store.projects(scan_id)
     facts = store.facts(scan_id)
     return {
         "product": "ATLAS",

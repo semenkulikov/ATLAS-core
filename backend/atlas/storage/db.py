@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -87,6 +88,94 @@ class Store:
             self._conn.execute("ROLLBACK")
             raise
         return changes
+
+    def save_discovery(self, scan_id: int, discovery: object) -> None:
+        """Store projects, documents, edges, and the facts discovery produced."""
+        from atlas.detectors.discover import Discovery
+
+        if not isinstance(discovery, Discovery):
+            raise TypeError("discovery result is required")
+        self._conn.execute("BEGIN")
+        try:
+            if discovery.facts:
+                self._insert_facts(
+                    scan_id,
+                    [_facts_only(discovery.facts)],
+                )
+            for project in discovery.projects:
+                self._conn.execute(
+                    "INSERT INTO projects (scan_id, project_id, name, root_path, fingerprint, "
+                    "anchor_kind, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        scan_id,
+                        project["project_id"],
+                        project["name"],
+                        project["root_path"],
+                        project["fingerprint"],
+                        project["anchor_kind"],
+                        json.dumps(_mask_payload(project), sort_keys=True, default=str),
+                    ),
+                )
+            for edge in discovery.edges:
+                self._conn.execute(
+                    "INSERT INTO edges (scan_id, src, dst, kind, evidence_ref) VALUES (?, ?, ?, ?, ?)",
+                    (scan_id, edge["src"], edge["dst"], edge["kind"], edge.get("evidence_ref")),
+                )
+            for doc in discovery.docs:
+                cursor = self._conn.execute(
+                    "INSERT INTO docs (scan_id, project_id, path, mtime, size, sha256, body) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        scan_id,
+                        doc["project_id"],
+                        doc["path"],
+                        doc["mtime"],
+                        doc["size"],
+                        doc["sha256"],
+                        doc["body"],
+                    ),
+                )
+                self._conn.execute(
+                    "INSERT INTO docs_fts (rowid, project_id, scan_id, path, body) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        _row_id(cursor),
+                        str(doc["project_id"]),
+                        str(scan_id),
+                        str(doc["path"]),
+                        str(doc["body"]),
+                    ),
+                )
+            self._conn.execute("COMMIT")
+        except Exception:
+            self._conn.execute("ROLLBACK")
+            raise
+
+    def projects(self, scan_id: int) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT project_id, name, root_path, fingerprint, anchor_kind, payload "
+            "FROM projects WHERE scan_id = ? ORDER BY name",
+            (scan_id,),
+        ).fetchall()
+        return [
+            {
+                "kind": "project",
+                "key": row["project_id"],
+                "payload": json.loads(row["payload"]),
+            }
+            for row in rows
+        ]
+
+    def search_docs(self, scan_id: int, query: str) -> list[dict[str, Any]]:
+        """Search indexed project documents. The query is split into words."""
+        match = _fts_query(query)
+        if not match:
+            return []
+        rows = self._conn.execute(
+            "SELECT project_id, path, snippet(docs_fts, 3, '', '', '…', 12) AS snippet "
+            "FROM docs_fts WHERE docs_fts MATCH ? AND scan_id = ? LIMIT 50",
+            (match, str(scan_id)),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def latest_successful_scan(self) -> int | None:
         row = self._conn.execute(
@@ -172,6 +261,8 @@ class Store:
             "SELECT kind, entity_key, payload FROM entities WHERE scan_id = ?",
             (scan_id,),
         ):
+            chunks.append(" ".join(str(value) for value in row))
+        for row in self._conn.execute("SELECT path, body FROM docs WHERE scan_id = ?", (scan_id,)):
             chunks.append(" ".join(str(value) for value in row))
         return "\n".join(chunks)
 
@@ -306,6 +397,17 @@ def _mask_payload(value: object) -> object:
     if isinstance(value, dict):
         return {str(key): _mask_payload(item) for key, item in value.items()}
     return value
+
+
+def _facts_only(facts: tuple[Fact, ...]) -> CollectorResult:
+    return CollectorResult(facts, (), ())
+
+
+def _fts_query(query: str) -> str:
+    parts = re.findall(r"\w+", query, flags=re.UNICODE)
+    if not parts:
+        return ""
+    return " AND ".join(f'"{part}"' for part in parts[:8])
 
 
 def _row_id(cursor: sqlite3.Cursor) -> int:

@@ -1,0 +1,111 @@
+- name: django
+  rule: stack.django
+  predicate: stack.framework
+  value: Django
+  all:
+    - any:
+        - {path: requirements.txt, contains: django}
+        - {path: pyproject.toml, contains: django}
+    - {path: manage.py, exists: true}
+
+- name: fastapi
+  rule: stack.fastapi
+  predicate: stack.framework
+  value: FastAPI
+  any:
+    - {path: requirements.txt, contains: fastapi}
+    - {path: pyproject.toml, contains: fastapi}
+
+- name: flask
+  rule: stack.flask
+  predicate: stack.framework
+  value: Flask
+  any:
+    - {path: requirements.txt, contains: flask}
+    - {path: pyproject.toml, contains: flask}
+
+- name: celery
+  rule: stack.celery
+  predicate: stack.worker
+  value: Celery
+  any:
+    - {path: requirements.txt, contains: celery}
+    - {path: pyproject.toml, contains: celery}
+
+- name: aiogram-bot
+  rule: stack.aiogram-bot
+  predicate: stack.role
+  value: Telegram bot on aiogram
+  all:
+    - any:
+        - {path: requirements.txt, contains: aiogram}
+        - {path: pyproject.toml, contains: aiogram}
+    - {path: anchor.txt, contains: bot.py}
+
+- name: node-express
+  rule: stack.express
+  predicate: stack.framework
+  value: Express
+  any:
+    - {path: package.json, contains: '"express"'}
+
+- name: node-next
+  rule: stack.next
+  predicate: stack.framework
+  value: Next.js
+  any:
+    - {path: package.json, contains: '"next"'}
+
+- name: node-runtime
+  rule: stack.node
+  predicate: stack.runtime
+  value: Node.js
+  all:
+    - {path: package.json, exists: true}
+
+- name: go-module
+  rule: stack.go
+  predicate: stack.module
+  value_from: go.mod
+  all:
+    - {path: go.mod, exists: true}
+
+- name: php-composer
+  rule: stack.php
+  predicate: stack.runtime
+  value: PHP
+  all:
+    - {path: composer.json, exists: true}
+
+- name: java-maven
+  rule: stack.maven
+  predicate: stack.build
+  value: Maven
+  all:
+    - {path: pom.xml, exists: true}
+
+- name: java-gradle
+  rule: stack.gradle
+  predicate: stack.build
+  value: Gradle
+  any:
+    - {path: build.gradle, exists: true}
+    - {path: build.gradle.kts, exists: true}
+
+- name: compose
+  rule: stack.compose
+  predicate: stack.compose
+  value: Docker Compose
+  any:
+    - {path: docker-compose.yml, exists: true}
+    - {path: compose.yml, exists: true}
+
+- name: static-site
+  rule: stack.static
+  predicate: stack.kind
+  value: Static site
+  all:
+    - {path: index.html, exists: true}
+    - {path: package.json, exists: false}
+    - {path: requirements.txt, exists: false}
+    - {path: go.mod, exists: false}

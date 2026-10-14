@@ -6,6 +6,7 @@ import logging
 
 from atlas.collectors.registry import COLLECTORS
 from atlas.collectors.view import HostView, try_lower_priority
+from atlas.detectors.discover import annotate_references, discover
 from atlas.domain import failed_collector
 from atlas.logging import get_logger, log_event
 from atlas.storage.db import Store
@@ -51,7 +52,10 @@ def run_scan(
                 sources=len(result.sources),
             )
             results.append(result)
+        results = annotate_references(results)
+        found = discover(view, results)
         store.persist(scan_id, results)
+        store.save_discovery(scan_id, found)
         store.finish_scan(scan_id, "succeeded")
     except Exception as exc:
         store.finish_scan(scan_id, "failed", exc.__class__.__name__)
