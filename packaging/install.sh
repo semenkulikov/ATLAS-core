@@ -113,7 +113,7 @@ if [ "$prefix" = / ] && [ "$start" -eq 1 ]; then
   systemctl enable atlas.service atlas-helper.service
   systemctl restart atlas-helper.service atlas.service
   i=0
-  while [ "$i" -lt 50 ]; do
+  while [ "$i" -lt 150 ]; do
     if [ -S /run/atlas/web.sock ]; then
       break
     fi

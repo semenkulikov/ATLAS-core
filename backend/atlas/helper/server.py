@@ -235,13 +235,18 @@ class HelperServer:
 
 
 def _subprocess_runner(argv: tuple[str, ...]) -> tuple[int, str, str]:
-    completed = subprocess.run(  # nosec B603
-        list(argv),
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    try:
+        completed = subprocess.run(  # nosec B603
+            list(argv),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else "command timed out"
+        return 124, stdout, stderr
     return completed.returncode, completed.stdout, completed.stderr
 
 
