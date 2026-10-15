@@ -47,10 +47,17 @@ curl -fsSLO "${BASE}/${NAME}.tar.gz.sha256"
 curl -fsSLO "${BASE}/minisign.pub" || true
 curl -fsSLO "${BASE}/${NAME}.tar.gz.minisig" || true
 
+# Accept "HASH  basename" or a mistaken absolute path from older builds.
+hash=$(awk '{print $1; exit}' "${NAME}.tar.gz.sha256")
+if [ -z "$hash" ] || [ "${#hash}" -ne 64 ]; then
+  echo "Checksum file is missing or malformed." >&2
+  exit 1
+fi
+printf '%s  %s\n' "$hash" "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256.check"
 if command -v shasum >/dev/null 2>&1; then
-  shasum -a 256 -c "${NAME}.tar.gz.sha256"
+  shasum -a 256 -c "${NAME}.tar.gz.sha256.check"
 elif command -v sha256sum >/dev/null 2>&1; then
-  sha256sum -c "${NAME}.tar.gz.sha256"
+  sha256sum -c "${NAME}.tar.gz.sha256.check"
 else
   echo "No sha256 tool found; refusing to install without a checksum check." >&2
   exit 1
