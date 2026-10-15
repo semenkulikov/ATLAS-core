@@ -96,13 +96,13 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
     if op in _CONTAINER:
         name = _token(params.get("name"), _NAME, "container name")
         risk = "high" if op == "container.remove" else "medium"
-        argv = ["docker", _CONTAINER[op]]
+        parts: list[str] = ["docker", _CONTAINER[op]]
         if op == "container.remove" and force:
-            argv.append("--force")
+            parts.append("--force")
         if op == "container.remove" and params.get("volumes") is True:
-            argv.append("--volumes")
-        argv.append(name)
-        return Plan(op, tuple(argv), risk, name)
+            parts.append("--volumes")
+        parts.append(name)
+        return Plan(op, tuple(parts), risk, name)
     if op == "image.prune":
         return Plan(op, ("docker", "image", "prune", "--force"), "high", "images")
     if op == "journal.vacuum":
@@ -142,10 +142,10 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
         raw = params.get("argv")
         if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
             raise ProtocolError("A fixed command argv is required.")
-        argv = tuple(str(item) for item in raw)
-        if argv not in _FIREWALL_ARGV:
+        firewall_argv = tuple(str(item) for item in raw)
+        if firewall_argv not in _FIREWALL_ARGV:
             raise ProtocolError("That command is not on the read whitelist.")
-        return Plan(op, argv, "low", " ".join(argv))
+        return Plan(op, firewall_argv, "low", " ".join(firewall_argv))
     if op == "read.dir":
         target = params.get("path")
         if not isinstance(target, str) or not readable_dir(target):

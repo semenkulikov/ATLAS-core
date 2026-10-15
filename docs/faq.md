@@ -1,6 +1,6 @@
 # FAQ
 
-**How do I install ATLAS?** Download the signed x86_64 archive from [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest), verify with minisign and the checksum, extract, then run `sudo ./atlas-1.0.0-linux-x86_64/install.sh`. Details are in the README.
+**How do I install ATLAS?** One command as root: `curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh`. Remove with `packaging/remove-atlas.sh` the same way.
 
 **Does a scan open a port?** No. `atlas scan` writes a report and does not listen.
 

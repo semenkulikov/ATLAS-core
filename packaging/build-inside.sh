@@ -17,7 +17,8 @@ cp -a /src/backend /tmp/backend
 "$stage/python/bin/python3" -m pip install --target "$stage/app" /tmp/backend
 cp -a /src/frontend/dist "$stage/frontend/dist"
 cp /src/packaging/atlas.service /src/packaging/atlas-helper.service /src/packaging/atlas.tmpfiles \
-  /src/packaging/pick-uid.sh "$stage/packaging/"
+  /src/packaging/pick-uid.sh /src/packaging/remove-atlas.sh "$stage/packaging/"
 cp /src/packaging/install-bundle.sh "$stage/install.sh"
-chmod 755 "$stage/install.sh" "$stage/packaging/pick-uid.sh" "$stage/python/bin/python3"
+chmod 755 "$stage/install.sh" "$stage/packaging/pick-uid.sh" \
+  "$stage/packaging/remove-atlas.sh" "$stage/python/bin/python3"
 PYTHONPATH="$stage/app" "$stage/python/bin/python3" -c 'import atlas,fastapi,uvicorn,psutil,pyotp; print(atlas.__version__)'

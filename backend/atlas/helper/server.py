@@ -250,9 +250,8 @@ def _subprocess_runner(argv: tuple[str, ...]) -> tuple[int, str, str]:
 
 def _peer_uid(conn: socket.socket) -> int | None:
     """Read the peer uid. Returns ``None`` where the platform has no SO_PEERCRED."""
-    try:
-        option = socket.SO_PEERCRED  # type: ignore[attr-defined]
-    except AttributeError:
+    option = getattr(socket, "SO_PEERCRED", None)
+    if option is None:
         return None
     try:
         raw = conn.getsockopt(socket.SOL_SOCKET, option, struct.calcsize("3i"))

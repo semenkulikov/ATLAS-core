@@ -771,9 +771,10 @@ def _list_config_dir(view: HostView, bag: Bag, directory: str) -> list[str]:
         except (OSError, ValueError):
             bag.note(directory, "unavailable", exc.strerror or "permission denied")
             return []
-        if answer.get("ok") and isinstance(answer.get("names"), list):
+        names = answer.get("names")
+        if answer.get("ok") and isinstance(names, list):
             bag.note(directory, "ok", "via helper")
-            return [str(name) for name in answer["names"] if isinstance(name, str)]
+            return [str(name) for name in names if isinstance(name, str)]
         bag.note(
             directory,
             str(answer.get("status") or "unavailable"),

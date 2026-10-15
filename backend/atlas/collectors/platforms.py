@@ -312,12 +312,12 @@ def engine_payload(view: HostView) -> tuple[dict[str, Any] | None, str, str]:
         from atlas.helper.client import engine_bundle
 
         try:
-            payload = engine_bundle(view.helper_socket)
+            bundled = engine_bundle(view.helper_socket)
         except (OSError, ValueError) as exc:
             return None, f"helper: {exc.__class__.__name__}", "unavailable"
-        if payload is None:
+        if bundled is None:
             return None, "helper:engine", "unavailable"
-        return payload, "helper:engine", "ok"
+        return bundled, "helper:engine", "ok"
     return None, "container engine", "absent"
 
 

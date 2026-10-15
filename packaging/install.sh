@@ -29,10 +29,8 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --url)
-      echo "This script does not download a release." >&2
-      echo "Install the signed archive from GitHub Releases, then run its install.sh." >&2
-      echo "See README.md for the download and verify steps." >&2
-      exit 2
+      # Download and install the signed release (same path as get-atlas.sh).
+      exec sh "$root/packaging/get-atlas.sh"
       ;;
     *)
       echo "Unknown argument: $1" >&2

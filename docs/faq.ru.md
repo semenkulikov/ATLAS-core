@@ -1,6 +1,6 @@
 # Вопросы
 
-**Как установить ATLAS?** Скачайте подписанный архив x86_64 с [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest), проверьте minisign и checksum, распакуйте и выполните `sudo ./atlas-1.0.0-linux-x86_64/install.sh`. Подробности в README.
+**Как установить ATLAS?** Одна команда от root: `curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh`. Удаление тем же способом через `packaging/remove-atlas.sh`.
 
 **Сканирование открывает порт?** Нет. `atlas scan` пишет отчёт и ничего не слушает.
 

@@ -10,31 +10,15 @@ ATLAS maps what runs on the host and keeps the file, command, or API response be
 
 ---
 
-## Install (signed x86_64 archive)
+## Install
 
-Verified on **Ubuntu 24.04 x86_64**. Debian, AlmaLinux, and arm64 are left to users for now.
-
-After download and signature check, install is one command:
+One command on Ubuntu 24.04 x86_64 (root):
 
 ```bash
-VER=1.0.0
-BASE="https://github.com/semenkulikov/ATLAS-core/releases/download/v${VER}"
-
-curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz"
-curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz.minisig"
-curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz.sha256"
-curl -fsSLO "${BASE}/minisign.pub"
-
-minisign -V -p minisign.pub -m "atlas-${VER}-linux-x86_64.tar.gz"
-shasum -a 256 -c "atlas-${VER}-linux-x86_64.tar.gz.sha256"
-
-tar -xzf "atlas-${VER}-linux-x86_64.tar.gz"
-sudo "./atlas-${VER}-linux-x86_64/install.sh"
+curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh
 ```
 
-`install.sh` creates the `atlas` user (free system UID), lays out `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas` (mode `0700`), enables systemd units, waits for `/run/atlas/web.sock`, and prints a tunnel command plus a **one-time enrollment token**.
-
-Do not pipe an unsigned script into a shell. `packaging/install.sh --url` exits on purpose: a git checkout does not download the archive for you.
+The script downloads the signed release, checks the SHA-256 checksum (and the minisign signature when `minisign` is installed), runs the archive installer, waits for `/run/atlas/web.sock`, and prints a tunnel command plus a one-time enrollment token.
 
 ### Open the panel
 
@@ -42,13 +26,20 @@ Do not pipe an unsigned script into a shell. `packaging/install.sh --url` exits 
 ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@YOUR_HOST
 ```
 
-Then open `http://127.0.0.1:8765`, enroll with the token, password, and TOTP.
+Open `http://127.0.0.1:8765` and enroll with the token, password, and TOTP.
 
 ### Uninstall
 
+One command:
+
 ```bash
-sudo -u atlas env PYTHONPATH=/opt/atlas/app \
-  /opt/atlas/python/bin/python3 -m atlas.cli.main uninstall --prefix / --purge
+curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/remove-atlas.sh | sudo sh
+```
+
+Offline, if ATLAS is already installed:
+
+```bash
+sudo /opt/atlas/packaging/remove-atlas.sh
 ```
 
 ---
@@ -65,6 +56,8 @@ sudo -u atlas env PYTHONPATH=/opt/atlas/app \
 | Control | Off until `atlas control enable`; actions go through a peer-checked helper whitelist |
 | Size | Bundled stripped CPython; documented budget 400 MiB (~141 MiB tree in 1.0.0) |
 
+Debian, AlmaLinux, and arm64 are left to users for now; this release was verified on Ubuntu 24.04 x86_64.
+
 ---
 
 ## Develop from a checkout
@@ -80,14 +73,15 @@ uv run --project backend python -m atlas.cli.main serve \
   --db /tmp/atlas.db --root fixtures/partial-host --tcp 127.0.0.1:8765
 ```
 
-Collector source list:
-
 ```bash
 uv run --project backend python -m atlas.cli.main manifest
 uv run --project backend python -m atlas.cli.main manifest --lang ru
 ```
 
-Git-tree install (no release download): `sudo packaging/install.sh`.
+From git (no release download): `sudo packaging/install.sh`.  
+Same as the curl installer: `sudo packaging/install.sh --url`.
+
+Manual archive path (download → verify → extract → `sudo ./atlas-1.0.0-linux-x86_64/install.sh`) is documented in [docs/publish.md](docs/publish.md).
 
 ---
 
@@ -102,7 +96,7 @@ Git-tree install (no release download): `sudo packaging/install.sh`.
 | Detectors | [docs/detectors.md](docs/detectors.md) | [docs/detectors.ru.md](docs/detectors.ru.md) |
 | Security policy | [SECURITY.md](SECURITY.md) | — |
 
-Release notes: [CHANGELOG.md](CHANGELOG.md) · Latest assets: [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest)
+Release notes: [CHANGELOG.md](CHANGELOG.md) · Assets: [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest)
 
 ---
 

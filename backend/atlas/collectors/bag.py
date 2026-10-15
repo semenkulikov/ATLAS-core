@@ -33,8 +33,8 @@ def _privileged_command(helper_socket: str, argv: list[str]) -> CommandResult | 
         answer = read_command(helper_socket, argv)
     except (OSError, ValueError):
         return None
+    code = _helper_code(answer.get("code"), default=1 if not answer.get("ok") else 0)
     if not answer.get("ok"):
-        code = int(answer.get("code") or 1)
         return CommandResult(
             tuple(argv),
             code,
@@ -43,10 +43,20 @@ def _privileged_command(helper_socket: str, argv: list[str]) -> CommandResult | 
         )
     return CommandResult(
         tuple(argv),
-        int(answer.get("code") or 0),
+        code,
         str(answer.get("stdout") or ""),
         str(answer.get("stderr") or ""),
     )
+
+
+def _helper_code(value: object, *, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return default
 
 
 def declare(

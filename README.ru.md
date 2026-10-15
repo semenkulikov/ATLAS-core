@@ -10,31 +10,15 @@ ATLAS фиксирует, что работает на машине, и для �
 
 ---
 
-## Установка (подписанный архив x86_64)
+## Установка
 
-Проверено на **Ubuntu 24.04 x86_64**. Debian, AlmaLinux и arm64 пока остаются задачей пользователей.
-
-После загрузки и проверки подписи установка — одна команда:
+Одна команда на Ubuntu 24.04 x86_64 (от root):
 
 ```bash
-VER=1.0.0
-BASE="https://github.com/semenkulikov/ATLAS-core/releases/download/v${VER}"
-
-curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz"
-curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz.minisig"
-curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz.sha256"
-curl -fsSLO "${BASE}/minisign.pub"
-
-minisign -V -p minisign.pub -m "atlas-${VER}-linux-x86_64.tar.gz"
-shasum -a 256 -c "atlas-${VER}-linux-x86_64.tar.gz.sha256"
-
-tar -xzf "atlas-${VER}-linux-x86_64.tar.gz"
-sudo "./atlas-${VER}-linux-x86_64/install.sh"
+curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh
 ```
 
-`install.sh` создаёт пользователя `atlas` (свободный системный UID), раскладывает `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas` (режим `0700`), включает юниты systemd, ждёт `/run/atlas/web.sock` и печатает команду туннеля плюс **одноразовый токен регистрации**.
-
-Не прогоняйте неподписанный скрипт через pipe в shell. `packaging/install.sh --url` специально завершается с ошибкой: копия из git сама архив не скачивает.
+Скрипт скачивает подписанный релиз, проверяет SHA-256 (и minisign, если установлен `minisign`), запускает установщик из архива, ждёт `/run/atlas/web.sock` и печатает команду туннеля плюс одноразовый токен регистрации.
 
 ### Открыть панель
 
@@ -46,9 +30,16 @@ ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@YOUR_HOST
 
 ### Удаление
 
+Одна команда:
+
 ```bash
-sudo -u atlas env PYTHONPATH=/opt/atlas/app \
-  /opt/atlas/python/bin/python3 -m atlas.cli.main uninstall --prefix / --purge
+curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/remove-atlas.sh | sudo sh
+```
+
+Офлайн, если ATLAS уже стоит:
+
+```bash
+sudo /opt/atlas/packaging/remove-atlas.sh
 ```
 
 ---
@@ -65,6 +56,8 @@ sudo -u atlas env PYTHONPATH=/opt/atlas/app \
 | Управление | Выключено до `atlas control enable`; действия идут через белый список помощника |
 | Размер | Свой stripped CPython; бюджет 400 МиБ (~141 МиБ дерева в 1.0.0) |
 
+Debian, AlmaLinux и arm64 пока остаются задачей пользователей; этот релиз проверен на Ubuntu 24.04 x86_64.
+
 ---
 
 ## Разработка из git
@@ -80,14 +73,15 @@ uv run --project backend python -m atlas.cli.main serve \
   --db /tmp/atlas.db --root fixtures/partial-host --tcp 127.0.0.1:8765
 ```
 
-Список источников сборщиков:
-
 ```bash
 uv run --project backend python -m atlas.cli.main manifest
 uv run --project backend python -m atlas.cli.main manifest --lang ru
 ```
 
-Установка из дерева git (без скачивания релиза): `sudo packaging/install.sh`.
+Из git без скачивания релиза: `sudo packaging/install.sh`.  
+То же, что curl-установщик: `sudo packaging/install.sh --url`.
+
+Ручной путь (скачать → проверить → распаковать → `sudo ./atlas-1.0.0-linux-x86_64/install.sh`) описан в [docs/publish.ru.md](docs/publish.ru.md).
 
 ---
 
