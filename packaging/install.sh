@@ -76,11 +76,16 @@ mkdir -p \
   "$prefix/opt/atlas" \
   "$prefix/etc/atlas" \
   "$prefix/var/lib/atlas" \
-  "$prefix/usr/lib/systemd/system"
+  "$prefix/usr/lib/systemd/system" \
+  "$prefix/usr/lib/tmpfiles.d"
 
 sed "s/__UID__/$uid/" "$root/packaging/atlas-helper.service" \
   > "$prefix/usr/lib/systemd/system/atlas-helper.service"
 cp "$root/packaging/atlas.service" "$prefix/usr/lib/systemd/system/atlas.service"
+cp "$root/packaging/atlas.tmpfiles" "$prefix/usr/lib/tmpfiles.d/atlas.conf"
+if [ "$prefix" = / ] && command -v systemd-tmpfiles >/dev/null 2>&1; then
+  systemd-tmpfiles --create "$prefix/usr/lib/tmpfiles.d/atlas.conf"
+fi
 if [ "$prefix" = / ] && command -v python3 >/dev/null 2>&1; then
   if [ ! -x "$prefix/opt/atlas/.venv/bin/atlas" ]; then
     python3 -m venv "$prefix/opt/atlas/.venv"
