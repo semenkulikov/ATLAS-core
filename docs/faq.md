@@ -18,5 +18,8 @@ curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packag
 **Is data sent to the cloud?**  
 No. Everything stays on the server until you enable Telegram or webhook alerts.
 
+**Why is the panel empty?**  
+Inventory appears after a scan. A fresh install runs one automatically; later use **Overview → Run scan**.
+
 **Can I restart services from the UI?**  
 Yes, after you turn control on. Dangerous actions ask for confirmation.

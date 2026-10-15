@@ -80,6 +80,16 @@ fi
 
 echo "installed"
 ls -l /run/atlas/web.sock
+
+echo "Running the first inventory scan…"
+mkdir -p /var/lib/atlas/reports
+chown atlas:atlas /var/lib/atlas/reports
+sudo -u atlas env PYTHONPATH=/opt/atlas/app /opt/atlas/python/bin/python3 -m atlas.cli.main scan \
+  --db /var/lib/atlas/atlas.db \
+  --helper-socket /run/atlas/helper.sock \
+  --output /var/lib/atlas/reports/latest \
+  || echo "First scan failed; run it from the panel after login." >&2
+
 echo "Open the panel from your workstation:"
 echo "  ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@$(hostname -f 2>/dev/null || hostname)"
 echo "One-time enrollment token:"

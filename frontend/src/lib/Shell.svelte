@@ -138,7 +138,7 @@
     </header>
     <main class="min-h-0 flex-1 overflow-auto p-6">
       {#if route === "overview"}
-        <Overview {lang} />
+        <Overview {lang} canScan={account.role === "owner"} />
       {:else if route === "projects"}
         <Projects {lang} onopen={openFact} />
       {:else if route === "services"}

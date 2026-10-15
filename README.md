@@ -35,7 +35,7 @@ Then open the panel through SSH:
 ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@YOUR_HOST
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765), use the one-time token from the installer, set a password and 2FA.
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765), use the one-time token from the installer, set a password and 2FA. The installer runs a first scan automatically; you can also start a new one from **Overview → Run scan**.
 
 ### Remove
 
