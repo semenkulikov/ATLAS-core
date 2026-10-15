@@ -81,16 +81,33 @@ fi
 echo "installed"
 ls -l /run/atlas/web.sock
 
-echo "Running the first inventory scan…"
-mkdir -p /var/lib/atlas/reports
-chown atlas:atlas /var/lib/atlas/reports
-sudo -u atlas env PYTHONPATH=/opt/atlas/app /opt/atlas/python/bin/python3 -m atlas.cli.main scan \
-  --db /var/lib/atlas/atlas.db \
-  --helper-socket /run/atlas/helper.sock \
-  --output /var/lib/atlas/reports/latest \
-  || echo "First scan failed; run it from the panel after login." >&2
+# Fresh install: seed inventory. Upgrade: keep the existing DB and accounts.
+has_owner=0
+if [ -f /var/lib/atlas/atlas.db ]; then
+  if sudo -u atlas /opt/atlas/python/bin/python3 -c \
+    "import sqlite3; c=sqlite3.connect('/var/lib/atlas/atlas.db'); print(c.execute('select count(*) from accounts').fetchone()[0])" \
+    2>/dev/null | grep -qx '[1-9][0-9]*'; then
+    has_owner=1
+  fi
+fi
+
+if [ "$has_owner" -eq 0 ]; then
+  echo "Running the first inventory scan…"
+  mkdir -p /var/lib/atlas/reports
+  chown atlas:atlas /var/lib/atlas/reports
+  sudo -u atlas env PYTHONPATH=/opt/atlas/app /opt/atlas/python/bin/python3 -m atlas.cli.main scan \
+    --db /var/lib/atlas/atlas.db \
+    --helper-socket /run/atlas/helper.sock \
+    --output /var/lib/atlas/reports/latest \
+    || echo "First scan failed; run it from the panel after login." >&2
+fi
 
 echo "Open the panel from your workstation:"
 echo "  ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@$(hostname -f 2>/dev/null || hostname)"
-echo "One-time enrollment token:"
-sudo -u atlas env PYTHONPATH=/opt/atlas/app /opt/atlas/python/bin/python3 -m atlas.cli.main token new --db /var/lib/atlas/atlas.db
+if [ "$has_owner" -eq 0 ]; then
+  echo "One-time enrollment token:"
+  sudo -u atlas env PYTHONPATH=/opt/atlas/app /opt/atlas/python/bin/python3 -m atlas.cli.main token new --db /var/lib/atlas/atlas.db
+else
+  echo "Existing owner kept. Sign in with your password and 2FA."
+  echo "To refresh inventory after an upgrade, use Overview → Run scan in the panel."
+fi

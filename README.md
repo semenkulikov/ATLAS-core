@@ -37,6 +37,17 @@ ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@YOUR_HOST
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765), use the one-time token from the installer, set a password and 2FA. The installer runs a first scan automatically; you can also start a new one from **Overview → Run scan**.
 
+### Upgrade
+
+Same command as install. It pulls the **latest** GitHub release, replaces `/opt/atlas`, restarts the services, and keeps `/var/lib/atlas` (accounts, scans, settings):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh
+```
+
+Pin a version if you need to: `ATLAS_VERSION=1.0.0 curl … | sudo sh`.  
+There is no separate update daemon — you choose when to upgrade.
+
 ### Remove
 
 ```bash

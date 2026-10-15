@@ -18,6 +18,9 @@ curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packag
 **Is data sent to the cloud?**  
 No. Everything stays on the server until you enable Telegram or webhook alerts.
 
+**How do I upgrade?**  
+Run the same install one-liner again. It installs the latest release over `/opt/atlas` and keeps your database. Then optionally **Overview → Run scan**.
+
 **Why is the panel empty?**  
 Inventory appears after a scan. A fresh install runs one automatically; later use **Overview → Run scan**.
 
