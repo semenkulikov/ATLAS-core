@@ -34,6 +34,7 @@ cp -a "$root/frontend/dist" /opt/atlas/frontend/dist
 cp -a "$root/packaging" /opt/atlas/packaging
 chown -R atlas:atlas /var/lib/atlas
 chmod 0700 /var/lib/atlas
+install -m 0755 "$root/packaging/atlas-cli.sh" /usr/local/bin/atlas
 
 awk '
   /^ExecStart=/ {

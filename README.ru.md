@@ -45,8 +45,16 @@ ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@YOUR_HOST
 curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh
 ```
 
-Закрепить версию: `ATLAS_VERSION=1.0.0 curl … | sudo sh`.  
-Отдельного автообновления нет — апгрейд запускаете вы.
+После апгрейда жёстко обновите страницу панели (Ctrl/Cmd+Shift+R), чтобы подтянулся новый UI.  
+Закрепить версию: `ATLAS_VERSION=1.0.1 curl … | sudo sh`.
+
+CLI на сервере (с 1.0.1):
+
+```bash
+atlas status
+atlas scan
+atlas control enable
+```
 
 ### Удаление
 

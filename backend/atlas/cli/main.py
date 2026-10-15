@@ -13,6 +13,23 @@ from atlas.collectors.view import open_view
 from atlas.logging import configure_logging
 from atlas.storage.db import Store
 
+_HOST_DB = Path("/var/lib/atlas/atlas.db")
+
+
+def _host_db_default() -> str | None:
+    """Prefer the installed database when it is already on disk."""
+    return str(_HOST_DB) if _HOST_DB.is_file() else None
+
+
+def _add_db(parser: argparse.ArgumentParser, *, required: bool = False) -> None:
+    default = _host_db_default()
+    parser.add_argument(
+        "--db",
+        default=default,
+        required=required and default is None,
+        help="SQLite file. Defaults to /var/lib/atlas/atlas.db when installed.",
+    )
+
 
 def main(argv: list[str] | None = None) -> int:
     """Run the ATLAS command line and return a process status."""
@@ -30,8 +47,12 @@ def main(argv: list[str] | None = None) -> int:
         dest="formats",
         help="Repeat to choose formats. The default is all three.",
     )
-    scan.add_argument("--output", default="atlas-report", help="Report path without an extension.")
-    scan.add_argument("--db", default=None, help="Also store the snapshot in this SQLite file.")
+    scan.add_argument(
+        "--output",
+        default="/var/lib/atlas/reports/latest" if _HOST_DB.is_file() else "atlas-report",
+        help="Report path without an extension.",
+    )
+    _add_db(scan)
     scan.add_argument(
         "--helper-socket",
         default="/run/atlas/helper.sock",
@@ -42,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest.add_argument("--lang", choices=("en", "ru"), default="en")
     manifest.set_defaults(func=cmd_manifest)
     serve = sub.add_parser("serve", help="Serve the panel API")
-    serve.add_argument("--db", required=True, help="SQLite file for scans and accounts.")
+    _add_db(serve, required=True)
     serve.add_argument("--root", default="/", help="Filesystem root the panel is allowed to read.")
     serve.add_argument("--socket", default="", help="Unix socket path. Used when --tcp is omitted.")
     serve.add_argument("--tcp", default="", help="Loopback address, for example 127.0.0.1:8765.")
@@ -63,23 +84,23 @@ def main(argv: list[str] | None = None) -> int:
     control_sub = control.add_subparsers(dest="control_command", required=True)
     for name in ("enable", "disable"):
         item = control_sub.add_parser(name)
-        item.add_argument("--db", required=True)
+        _add_db(item, required=True)
         item.set_defaults(func=cmd_control)
     token = sub.add_parser("token", help="Manage one-time install tokens")
     token_sub = token.add_subparsers(dest="token_command", required=True)
     token_new = token_sub.add_parser("new", help="Print a one-time owner enrollment token")
-    token_new.add_argument("--db", required=True)
+    _add_db(token_new, required=True)
     token_new.set_defaults(func=cmd_token_new)
     status = sub.add_parser("status", help="Show the version, control switch, and latest scan")
-    status.add_argument("--db", required=True)
+    _add_db(status, required=True)
     status.set_defaults(func=cmd_status)
     doctor = sub.add_parser("doctor", help="Check file permissions and outbound alert channels")
-    doctor.add_argument("--db", required=True)
+    _add_db(doctor, required=True)
     doctor.set_defaults(func=cmd_doctor)
     reset = sub.add_parser("user", help="Local account recovery")
     reset_sub = reset.add_subparsers(dest="user_command", required=True)
     reset_2fa = reset_sub.add_parser("reset-2fa", help="Replace the owner TOTP secret")
-    reset_2fa.add_argument("--db", required=True)
+    _add_db(reset_2fa, required=True)
     reset_2fa.add_argument("--username", default="owner")
     reset_2fa.set_defaults(func=cmd_reset_2fa)
     expose = sub.add_parser("expose", help="Show how the panel may be reached")
@@ -89,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     uninstall.add_argument("--purge", action="store_true")
     uninstall.set_defaults(func=cmd_uninstall)
     exported = sub.add_parser("export", help="Write the latest completed scan as a report")
-    exported.add_argument("--db", required=True)
+    _add_db(exported, required=True)
     exported.add_argument(
         "--format",
         action="append",
@@ -114,13 +135,15 @@ def cmd_scan(args: argparse.Namespace) -> int:
     helper_path = helper if Path(helper).exists() else None
     view = open_view(Path(args.root), helper_socket=helper_path)
     formats = args.formats or ["md", "json", "html"]
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     if args.db:
         store = Store.open(Path(args.db))
         try:
             scan_id = run_scan(
                 view, store, "manual", lower_priority=True, helper_socket=helper_path
             )
-            _write_reports(store, scan_id, Path(args.output), formats)
+            _write_reports(store, scan_id, output, formats)
         finally:
             store.close()
         return 0
@@ -130,7 +153,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             scan_id = run_scan(
                 view, store, "oneshot", lower_priority=True, helper_socket=helper_path
             )
-            _write_reports(store, scan_id, Path(args.output), formats)
+            _write_reports(store, scan_id, output, formats)
         finally:
             store.close()
     return 0

@@ -45,8 +45,16 @@ Same command as install. It pulls the **latest** GitHub release, replaces `/opt/
 curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh
 ```
 
-Pin a version if you need to: `ATLAS_VERSION=1.0.0 curl … | sudo sh`.  
-There is no separate update daemon — you choose when to upgrade.
+After upgrade, hard-refresh the panel (Ctrl/Cmd+Shift+R) so the new UI loads.  
+Pin a version if you need to: `ATLAS_VERSION=1.0.1 curl … | sudo sh`.
+
+CLI on the host (after 1.0.1):
+
+```bash
+atlas status
+atlas scan
+atlas control enable
+```
 
 ### Remove
 

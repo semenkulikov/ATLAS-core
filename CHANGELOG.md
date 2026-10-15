@@ -2,6 +2,17 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.0.1] - 2026-10-15
+
+### Added
+- Overview **Run scan** button for owners, and a first scan during install.
+- `/usr/local/bin/atlas` CLI wrapper so `atlas scan` and `atlas control enable` work after install.
+- In-place upgrade via the same one-liner; keeps accounts and database.
+
+### Fixed
+- Upgrade no longer prints a useless enrollment token when an owner already exists.
+- CLI defaults `--db` to `/var/lib/atlas/atlas.db` on an installed host.
+
 ## [1.0.0] - 2026-10-15
 
 ### Added

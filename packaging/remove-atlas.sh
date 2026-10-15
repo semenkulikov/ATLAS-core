@@ -17,7 +17,8 @@ if [ -x /opt/atlas/python/bin/python3 ] && [ -d /opt/atlas/app ]; then
 fi
 
 rm -rf /opt/atlas /etc/atlas /var/lib/atlas /run/atlas
-rm -f /usr/lib/systemd/system/atlas.service \
+rm -f /usr/local/bin/atlas \
+  /usr/lib/systemd/system/atlas.service \
   /usr/lib/systemd/system/atlas-helper.service \
   /usr/lib/tmpfiles.d/atlas.conf
 systemctl daemon-reload 2>/dev/null || true
