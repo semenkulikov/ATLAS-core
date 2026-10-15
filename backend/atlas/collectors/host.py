@@ -741,9 +741,22 @@ def _read_sudoers(view: HostView, bag: Bag) -> tuple[str, str] | None:
     if main.ok and main.text is not None:
         chunks.append(main.text)
     directory = view.mapped("/etc/sudoers.d")
-    if directory.is_dir():
-        for path in sorted(directory.iterdir()):
-            if not path.is_file() or path.is_symlink():
+    try:
+        is_dir = directory.is_dir()
+    except OSError as exc:
+        bag.note("/etc/sudoers.d", "unavailable", exc.strerror or "permission denied")
+        is_dir = False
+    if is_dir:
+        try:
+            entries = sorted(directory.iterdir())
+        except OSError as exc:
+            bag.note("/etc/sudoers.d", "unavailable", exc.strerror or "permission denied")
+            entries = []
+        for path in entries:
+            try:
+                if not path.is_file() or path.is_symlink():
+                    continue
+            except OSError:
                 continue
             logical = "/etc/sudoers.d/" + path.name
             extra = bag.read(view, logical)
@@ -758,10 +771,20 @@ def _read_sudoers(view: HostView, bag: Bag) -> tuple[str, str] | None:
 def _sshd(view: HostView, bag: Bag) -> None:
     files = ["/etc/ssh/sshd_config"]
     dropin = view.mapped("/etc/ssh/sshd_config.d")
-    if dropin.is_dir():
+    try:
+        is_dir = dropin.is_dir()
+    except OSError as exc:
+        bag.note("/etc/ssh/sshd_config.d", "unavailable", exc.strerror or "permission denied")
+        is_dir = False
+    if is_dir:
+        try:
+            entries = sorted(dropin.iterdir())
+        except OSError as exc:
+            bag.note("/etc/ssh/sshd_config.d", "unavailable", exc.strerror or "permission denied")
+            entries = []
         files.extend(
             "/etc/ssh/sshd_config.d/" + path.name
-            for path in sorted(dropin.iterdir())
+            for path in entries
             if path.is_file() and not path.is_symlink()
         )
     merged: dict[str, tuple[str, int, str]] = {}

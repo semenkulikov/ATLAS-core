@@ -70,6 +70,16 @@ class NetSample:
 
 
 @dataclass(frozen=True, slots=True)
+class CgroupSample:
+    """One cgroup reading for a systemd unit or a container."""
+
+    kind: str
+    name: str
+    memory_bytes: int | None
+    cpu_usage_usec: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class HostSample:
     """One reading of the host. Missing sources are ``None`` or empty tuples."""
 
@@ -81,6 +91,8 @@ class HostSample:
     disks: tuple[DiskSample, ...]
     network: tuple[NetSample, ...]
     source: str
+    units: tuple[CgroupSample, ...] = ()
+    containers: tuple[CgroupSample, ...] = ()
 
 
 class MetricsSampler(Protocol):
@@ -126,6 +138,7 @@ class ProcMetricsSampler:
 
     def sample(self) -> HostSample:
         cpu, cores = self._cpu()
+        units, containers = self._cgroups()
         return HostSample(
             collected_at=time.time(),
             cpu=cpu,
@@ -135,6 +148,8 @@ class ProcMetricsSampler:
             disks=self._disks(),
             network=self._network(),
             source="proc",
+            units=units,
+            containers=containers,
         )
 
     def _cpu(self) -> tuple[CpuTimes | None, tuple[CpuTimes, ...]]:
@@ -248,6 +263,65 @@ class ProcMetricsSampler:
             except ValueError:
                 continue
         return tuple(rows)
+
+    def _cgroups(self) -> tuple[tuple[CgroupSample, ...], tuple[CgroupSample, ...]]:
+        root = Path("/sys/fs/cgroup")
+        if not root.is_dir():
+            return (), ()
+        units: list[CgroupSample] = []
+        containers: list[CgroupSample] = []
+        slice_dir = root / "system.slice"
+        if slice_dir.is_dir():
+            try:
+                entries = sorted(slice_dir.iterdir())
+            except OSError:
+                entries = []
+            for entry in entries:
+                try:
+                    if not entry.is_dir():
+                        continue
+                except OSError:
+                    continue
+                name = entry.name
+                if name.endswith(".service"):
+                    sample = _cgroup_sample("service", name.removesuffix(".service"), entry)
+                    if sample is not None:
+                        units.append(sample)
+                    if len(units) >= 12:
+                        break
+                if name.startswith("docker-") and name.endswith(".scope"):
+                    cid = name.removeprefix("docker-").removesuffix(".scope")[:12]
+                    sample = _cgroup_sample("container", cid, entry)
+                    if sample is not None:
+                        containers.append(sample)
+                    if len(containers) >= 12:
+                        break
+        return tuple(units), tuple(containers)
+
+
+def _cgroup_sample(kind: str, name: str, directory: Path) -> CgroupSample | None:
+    if not name or any(char in name for char in "/ \n\t'\""):
+        return None
+    memory_text = _read(directory / "memory.current")
+    cpu_text = _read(directory / "cpu.stat")
+    memory_bytes = None
+    cpu_usage = None
+    if memory_text is not None:
+        try:
+            memory_bytes = int(memory_text.strip())
+        except ValueError:
+            memory_bytes = None
+    if cpu_text is not None:
+        for line in cpu_text.splitlines():
+            if line.startswith("usage_usec "):
+                try:
+                    cpu_usage = int(line.split()[1])
+                except (IndexError, ValueError):
+                    cpu_usage = None
+                break
+    if memory_bytes is None and cpu_usage is None:
+        return None
+    return CgroupSample(kind, name, memory_bytes, cpu_usage)
 
 
 class PsutilMetricsSampler:

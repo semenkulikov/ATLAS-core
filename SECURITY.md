@@ -10,7 +10,7 @@ The maintainer aims to answer within 7 days and to publish a fix before describi
 
 ## What a release is
 
-Version 0.1.0 has a signed x86_64 archive. Verify `atlas-0.1.0-linux-x86_64.tar.gz` with `packaging/minisign.pub` and the published checksum before installing. `packaging/install.sh` still refuses `--url`. Do not pipe a downloaded script into a shell.
+Version 1.0.0 has a signed x86_64 archive. Verify `atlas-1.0.0-linux-x86_64.tar.gz` with `packaging/minisign.pub` and the published checksum before installing. `packaging/install.sh` still refuses `--url`. Do not pipe a downloaded script into a shell.
 
 ## Scope
 

@@ -50,6 +50,8 @@ def test_whitelist_refuses_a_protected_unit_and_a_shell_character() -> None:
     reboot = build_plan("host.reboot", {"hostname": "web-1"})
     assert reboot.delay_seconds == 10
     assert reboot.argv == ("systemctl", "reboot")
+    remove = build_plan("container.remove", {"name": "atlas-probe", "force": True})
+    assert remove.argv == ("docker", "rm", "--force", "atlas-probe")
 
 
 def test_ssh_edit_keeps_a_backup(tmp_path: Path) -> None:

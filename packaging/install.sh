@@ -7,6 +7,8 @@ dry=0
 start=1
 oneshot=0
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+# shellcheck disable=SC1091
+. "$root/packaging/pick-uid.sh"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -65,7 +67,12 @@ if [ "$prefix" = / ]; then
     exit 1
   fi
   if ! id atlas >/dev/null 2>&1; then
-    useradd --system --home-dir /var/lib/atlas --shell /usr/sbin/nologin atlas
+    uid=$(pick_atlas_uid)
+    shell=/usr/sbin/nologin
+    if [ ! -x "$shell" ]; then
+      shell=/sbin/nologin
+    fi
+    useradd --system --uid "$uid" --home-dir /var/lib/atlas --shell "$shell" atlas
   fi
   uid=$(id -u atlas)
 else
@@ -96,6 +103,7 @@ if [ "$prefix" = / ] && command -v python3 >/dev/null 2>&1; then
     npm --prefix "$root/frontend" run build
   fi
   chown -R atlas:atlas "$prefix/opt/atlas/.venv" "$prefix/var/lib/atlas"
+  chmod 0700 "$prefix/var/lib/atlas"
 fi
 printf '%s\n' "The application lives in /opt/atlas. Repeat this script to repair units." \
   > "$prefix/etc/atlas/README"
@@ -103,6 +111,24 @@ printf '%s\n' "The application lives in /opt/atlas. Repeat this script to repair
 if [ "$prefix" = / ] && [ "$start" -eq 1 ]; then
   systemctl daemon-reload
   systemctl enable --now atlas.service atlas-helper.service
+  i=0
+  while [ "$i" -lt 50 ]; do
+    if [ -S /run/atlas/web.sock ]; then
+      break
+    fi
+    i=$((i + 1))
+    sleep 0.1
+  done
+  if [ ! -S /run/atlas/web.sock ]; then
+    echo "The panel socket did not appear." >&2
+    exit 1
+  fi
+  echo "Open the panel from your workstation:"
+  echo "  ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@$(hostname -f 2>/dev/null || hostname)"
+  if [ -x /opt/atlas/.venv/bin/atlas ]; then
+    echo "One-time enrollment token:"
+    sudo -u atlas /opt/atlas/.venv/bin/atlas token new --db /var/lib/atlas/atlas.db
+  fi
 fi
 
 echo "installed"

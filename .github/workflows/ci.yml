@@ -17,9 +17,19 @@ jobs:
       - name: Types
         run: uv run --project backend mypy --config-file backend/pyproject.toml backend/atlas
       - name: Tests
-        run: uv run --project backend pytest backend/tests
+        run: >
+          uv run --project backend pytest backend/tests
+          --cov=atlas.domain --cov=atlas.detectors --cov=atlas.security
+          --cov-report=term-missing
+          --cov-fail-under=85
       - name: Bandit
         run: uv run --project backend bandit -q -r backend/atlas -c backend/pyproject.toml
+      - name: Dependency audit
+        run: uv run --project backend pip-audit --project backend
+      - name: Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: p/python
 
   frontend:
     runs-on: ubuntu-latest

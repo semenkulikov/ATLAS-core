@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 
 # Commands are argv lists. The shell is never invoked.
@@ -146,6 +147,7 @@ class HostView:
     now: datetime
     files_read: list[str] = field(default_factory=list)
     commands_run: list[str] = field(default_factory=list)
+    helper_socket: str | None = None
 
     @property
     def is_live(self) -> bool:
@@ -167,7 +169,9 @@ class HostView:
         except FileNotFoundError:
             return _outcome(path, "absent", reason="file not found")
         except OSError as exc:
-            return _outcome(path, "unavailable", reason=exc.strerror or "unreadable")
+            return self._privileged_read(path) or _outcome(
+                path, "unavailable", reason=exc.strerror or "unreadable"
+            )
         if not self.is_live and not _is_inside(resolved, self.root.resolve()):
             return _outcome(path, "unavailable", reason="path escapes the scan root")
         if is_forbidden_path(str(resolved)):
@@ -175,9 +179,13 @@ class HostView:
         try:
             data = resolved.read_bytes()
         except PermissionError:
-            return _outcome(path, "unavailable", reason="permission denied")
+            return self._privileged_read(path) or _outcome(
+                path, "unavailable", reason="permission denied"
+            )
         except OSError as exc:
-            return _outcome(path, "unavailable", reason=exc.strerror or "unreadable")
+            return self._privileged_read(path) or _outcome(
+                path, "unavailable", reason=exc.strerror or "unreadable"
+            )
         truncated = len(data) > max_bytes
         if truncated:
             data = data[:max_bytes]
@@ -196,6 +204,38 @@ class HostView:
             )
         return _outcome(path, "ok", text, reason, digest)
 
+    def _privileged_read(self, path: str) -> ReadOutcome | None:
+        """Ask the root helper for an allowlisted file the atlas user cannot open."""
+        if not self.is_live or not self.helper_socket:
+            return None
+        from atlas.helper.client import read_file
+        from atlas.helper.protocol import readable_path
+
+        if not readable_path(path):
+            return None
+        try:
+            answer = read_file(self.helper_socket, path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
+        if answer.get("ok") and isinstance(answer.get("text"), str):
+            digest = answer.get("sha256")
+            return _outcome(
+                path,
+                "ok",
+                str(answer["text"]),
+                None,
+                digest if isinstance(digest, str) else None,
+            )
+        status = answer.get("status")
+        reason = answer.get("error")
+        if status in {"absent", "unavailable"}:
+            return _outcome(
+                path,
+                str(status),
+                reason=str(reason) if reason is not None else "unavailable",
+            )
+        return None
+
     def fixture_json(self, name: str) -> object | None:
         """Load a JSON document that exists only in a fixture, never on a live host."""
         if self.is_live:
@@ -209,11 +249,16 @@ class HostView:
         return loaded
 
 
-def open_view(root: Path, now: datetime | None = None) -> HostView:
+def open_view(
+    root: Path,
+    now: datetime | None = None,
+    *,
+    helper_socket: str | None = None,
+) -> HostView:
     """Open a live view for ``/`` and a fixture view for any other directory."""
     moment = now or datetime.now(UTC)
     if root.resolve() == Path("/").resolve():
-        return HostView(root, SubprocessRunner(), moment)
+        return HostView(root, SubprocessRunner(), moment, helper_socket=helper_socket)
     return HostView(root, FixtureRunner(root), moment)
 
 

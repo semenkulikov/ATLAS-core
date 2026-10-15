@@ -303,8 +303,20 @@ def engine_payload(view: HostView) -> tuple[dict[str, Any] | None, str, str]:
                 "volumes": engine_get(sock, "/volumes"),
             }
         except (OSError, httpx.HTTPError, ValueError) as exc:
+            if view.helper_socket:
+                break
             return None, f"{sock}: {exc.__class__.__name__}", "unavailable"
         return payload, str(sock), "ok"
+    if view.helper_socket:
+        from atlas.helper.client import engine_bundle
+
+        try:
+            payload = engine_bundle(view.helper_socket)
+        except (OSError, ValueError) as exc:
+            return None, f"helper: {exc.__class__.__name__}", "unavailable"
+        if payload is None:
+            return None, "helper:engine", "unavailable"
+        return payload, "helper:engine", "ok"
     return None, "container engine", "absent"
 
 

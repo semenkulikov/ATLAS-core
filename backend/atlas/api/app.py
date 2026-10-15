@@ -89,7 +89,7 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     """Build the API. OpenAPI is not mounted publicly; owners fetch it explicitly."""
-    app = FastAPI(title="ATLAS", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="ATLAS", version="1.0.0", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.atlas = AppState(
         store,
         settings,
@@ -488,8 +488,11 @@ async def start_scan(request: Request) -> Response:
     actor = _require(request, _ADMIN)
     _csrf(request, actor)
     state = _state(request)
-    view = open_view(state.settings.root)
-    scan_id = run_scan(view, state.store, "manual", lower_priority=True)
+    helper = state.settings.helper_socket or None
+    if helper and not Path(helper).exists():
+        helper = None
+    view = open_view(state.settings.root, helper_socket=helper)
+    scan_id = run_scan(view, state.store, "manual", lower_priority=True, helper_socket=helper)
     log_event(_LOG, logging.INFO, "scan.finished", scan_id=scan_id, username=actor.username)
     return _json(request, {"scan_id": scan_id})
 
@@ -572,16 +575,55 @@ async def stream(websocket: WebSocket) -> None:
         return
     channel = str(message.get("subscribe") or "") if isinstance(message, dict) else ""
     if channel == "metrics.live":
-        sample = default_sampler().sample()
-        write_sample(state.store.conn, sample)
-        await websocket.send_json({"channel": channel, "collected_at": sample.collected_at})
+        import asyncio
+
+        try:
+            while True:
+                sample = default_sampler().sample()
+                await websocket.send_json(
+                    {
+                        "channel": channel,
+                        "collected_at": sample.collected_at,
+                        "loadavg": sample.loadavg,
+                        "memory_available": None
+                        if sample.memory is None
+                        else sample.memory.available_bytes,
+                        "cpu_idle": None if sample.cpu is None else sample.cpu.idle,
+                        "units": [
+                            {
+                                "name": unit.name,
+                                "memory_bytes": unit.memory_bytes,
+                                "cpu_usage_usec": unit.cpu_usage_usec,
+                            }
+                            for unit in sample.units[:8]
+                        ],
+                        "containers": [
+                            {
+                                "name": item.name,
+                                "memory_bytes": item.memory_bytes,
+                                "cpu_usage_usec": item.cpu_usage_usec,
+                            }
+                            for item in sample.containers[:8]
+                        ],
+                    }
+                )
+                await asyncio.sleep(1)
+        except Exception:
+            return
     elif channel == "logs.follow":
+        import asyncio
+
         source = str(message.get("source") or "")
         try:
-            payload = read_log(state.settings.root, source, 100)
-        except LogError as exc:
-            payload = {"status": "unavailable", "reason": exc.message, "lines": []}
-        await websocket.send_json({"channel": channel, "payload": payload})
+            while True:
+                try:
+                    payload = read_log(state.settings.root, source, 100)
+                except LogError as exc:
+                    payload = {"status": "unavailable", "reason": exc.message, "lines": []}
+                await websocket.send_json({"channel": channel, "payload": payload})
+                await asyncio.sleep(2)
+        except Exception:
+            return
     elif channel == "events":
         await websocket.send_json({"channel": channel, "events": []})
     else:

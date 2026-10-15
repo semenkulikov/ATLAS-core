@@ -7,9 +7,7 @@ the second factor.
 
 from __future__ import annotations
 
-import json
 import re
-import socket
 from datetime import UTC, datetime
 
 from atlas.application.audit import append_audit
@@ -216,16 +214,6 @@ def _totp_ok(store: Store, username: str, code: str) -> bool:
 
 
 def _call_helper(path: str, request: dict[str, object]) -> dict[str, object]:
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-        client.connect(path)
-        client.sendall(json.dumps(request).encode("utf-8") + b"\n")
-        raw = b""
-        while b"\n" not in raw and len(raw) < 65536:
-            chunk = client.recv(4096)
-            if not chunk:
-                break
-            raw += chunk
-    payload = json.loads(raw.decode("utf-8"))
-    if not isinstance(payload, dict):
-        raise OSError("the helper answer is not an object")
-    return payload
+    from atlas.helper.client import call_helper
+
+    return call_helper(path, request)

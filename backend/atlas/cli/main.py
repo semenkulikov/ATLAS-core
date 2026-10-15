@@ -32,6 +32,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     scan.add_argument("--output", default="atlas-report", help="Report path without an extension.")
     scan.add_argument("--db", default=None, help="Also store the snapshot in this SQLite file.")
+    scan.add_argument(
+        "--helper-socket",
+        default="/run/atlas/helper.sock",
+        help="Unix socket of the root helper for privileged inventory reads.",
+    )
     scan.set_defaults(func=cmd_scan)
     manifest = sub.add_parser("manifest", help="Print the list of sources ATLAS reads")
     manifest.add_argument("--lang", choices=("en", "ru"), default="en")
@@ -105,12 +110,16 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_scan(args: argparse.Namespace) -> int:
     """Scan ``--root`` and write the requested report files."""
-    view = open_view(Path(args.root))
+    helper = getattr(args, "helper_socket", None) or "/run/atlas/helper.sock"
+    helper_path = helper if Path(helper).exists() else None
+    view = open_view(Path(args.root), helper_socket=helper_path)
     formats = args.formats or ["md", "json", "html"]
     if args.db:
         store = Store.open(Path(args.db))
         try:
-            scan_id = run_scan(view, store, "manual", lower_priority=True)
+            scan_id = run_scan(
+                view, store, "manual", lower_priority=True, helper_socket=helper_path
+            )
             _write_reports(store, scan_id, Path(args.output), formats)
         finally:
             store.close()
@@ -118,7 +127,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="atlas-scan-") as temporary:
         store = Store.open(Path(temporary) / "scan.db")
         try:
-            scan_id = run_scan(view, store, "oneshot", lower_priority=True)
+            scan_id = run_scan(
+                view, store, "oneshot", lower_priority=True, helper_socket=helper_path
+            )
             _write_reports(store, scan_id, Path(args.output), formats)
         finally:
             store.close()

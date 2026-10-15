@@ -1,6 +1,6 @@
 [project]
 name = "atlas"
-version = "0.1.0"
+version = "1.0.0"
 description = "Evidence-backed inventory and admin panel for one Linux server."
 requires-python = ">=3.12"
 license = "Apache-2.0"
@@ -24,6 +24,7 @@ dev = [
     "bandit>=1.8.0",
     "hypothesis>=6.112.0",
     "mypy>=1.13.0",
+    "pip-audit>=2.7.0",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
     "ruff>=0.7.0",

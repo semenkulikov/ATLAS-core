@@ -30,6 +30,25 @@ PROTECTED_UNITS = frozenset(
 )
 PROTECTED_ACCOUNTS = frozenset({"root", "atlas"})
 
+_ENGINE_GET = frozenset(
+    {
+        "/containers/json",
+        "/images/json",
+        "/networks",
+        "/volumes",
+    }
+)
+_FIREWALL_ARGV = {
+    ("nft", "list", "ruleset"),
+    ("iptables-save",),
+    ("ufw", "status", "verbose"),
+    ("firewall-cmd", "--list-all"),
+}
+_SUDOERS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_HOME_KEYS = re.compile(r"^/(?:root|home/[a-z_][a-z0-9_-]{0,31})/\.ssh/authorized_keys$")
+_SSHD_DROPIN = re.compile(r"^/etc/ssh/sshd_config\.d/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_CERT_PATH = re.compile(r"^/etc/letsencrypt/live/[A-Za-z0-9][A-Za-z0-9._-]{0,253}/fullchain\.pem$")
+
 _SERVICE = {
     "service.start": "start",
     "service.stop": "stop",
@@ -77,6 +96,8 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
         name = _token(params.get("name"), _NAME, "container name")
         risk = "high" if op == "container.remove" else "medium"
         argv = ["docker", _CONTAINER[op]]
+        if op == "container.remove" and force:
+            argv.append("--force")
         if op == "container.remove" and params.get("volumes") is True:
             argv.append("--volumes")
         argv.append(name)
@@ -106,7 +127,45 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
         if "PRIVATE KEY" in key:
             raise ProtocolError("A private key is not accepted.")
         return Plan(op, (), "high", username)
+    if op == "read.file":
+        target = params.get("path")
+        if not isinstance(target, str) or not readable_path(target):
+            raise ProtocolError("That file is not on the read whitelist.")
+        return Plan(op, (), "low", target)
+    if op == "read.engine":
+        route = params.get("path")
+        if not isinstance(route, str) or not readable_engine_path(route):
+            raise ProtocolError("That engine path is not on the read whitelist.")
+        return Plan(op, (), "low", route.split("?", 1)[0])
+    if op == "read.command":
+        raw = params.get("argv")
+        if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+            raise ProtocolError("A fixed command argv is required.")
+        argv = tuple(str(item) for item in raw)
+        if argv not in _FIREWALL_ARGV:
+            raise ProtocolError("That command is not on the read whitelist.")
+        return Plan(op, argv, "low", " ".join(argv))
     raise ProtocolError("That operation is not in the whitelist.")
+
+
+def readable_path(path: str) -> bool:
+    """Return whether the helper may read ``path`` for inventory."""
+    if path in {"/etc/sudoers", "/etc/ssh/sshd_config"}:
+        return True
+    if path.startswith("/etc/sudoers.d/"):
+        name = path.removeprefix("/etc/sudoers.d/")
+        return "/" not in name and _SUDOERS_NAME.fullmatch(name) is not None
+    if _HOME_KEYS.fullmatch(path) is not None:
+        return True
+    if _SSHD_DROPIN.fullmatch(path) is not None:
+        return True
+    return _CERT_PATH.fullmatch(path) is not None
+
+
+def readable_engine_path(path: str) -> bool:
+    """Return whether ``path`` is an allowlisted Docker Engine GET."""
+    base = path.split("?", 1)[0]
+    return base in _ENGINE_GET
 
 
 def _unit(value: object) -> str:

@@ -20,11 +20,14 @@ def run_scan(
     mode: str,
     *,
     lower_priority: bool = False,
+    helper_socket: str | None = None,
 ) -> int:
     """Collect the host into ``store`` and return the scan id.
 
     A collector that raises is recorded as unavailable. It does not abort the scan.
     """
+    if helper_socket and not view.helper_socket:
+        view.helper_socket = helper_socket
     if lower_priority:
         try_lower_priority()
     scan_id = store.start_scan(mode)

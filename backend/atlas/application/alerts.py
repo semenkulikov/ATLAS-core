@@ -6,7 +6,6 @@ transport is asked to deliver that one message.
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 from collections.abc import Callable
@@ -27,7 +26,7 @@ DEFAULT_RULES = (
     ("memory_low", "threshold"),
     ("cert_expiring", "state"),
 )
-_KINDS = {"webhook": ("https://", "http://"), "telegram": ("",), "smtp": ("",)}
+_KINDS = {"webhook": ("https://", "http://"), "telegram": ("",)}
 COOLDOWN = timedelta(minutes=15)
 Transport = Callable[[str, str, str], None]
 
@@ -54,7 +53,7 @@ def ensure_rules(conn: sqlite3.Connection) -> None:
 def save_channel(conn: sqlite3.Connection, kind: str, target: str, *, enabled: bool = False) -> int:
     """Store one delivery channel. It is off unless the caller enables it."""
     if kind not in _KINDS:
-        raise AlertError("The channel must be webhook, telegram, or smtp.")
+        raise AlertError("The channel must be webhook or telegram.")
     cleaned = target.strip()
     if kind == "webhook" and not cleaned.startswith(_KINDS["webhook"]):
         raise AlertError("A webhook target must be an http or https URL.")
@@ -238,24 +237,4 @@ def _network_transport(kind: str, target: str, message: str) -> None:
         )
         response.raise_for_status()
         return
-    if kind == "smtp":
-        _send_smtp(target, message)
-        return
     raise AlertError("The channel kind is not supported.")
-
-
-def _send_smtp(target: str, message: str) -> None:
-    import smtplib
-    from email.message import EmailMessage
-
-    payload = json.loads(target)
-    mail = EmailMessage()
-    mail["From"] = str(payload["from"])
-    mail["To"] = str(payload["to"])
-    mail["Subject"] = "ATLAS alert"
-    mail.set_content(message)
-    with smtplib.SMTP(str(payload["host"]), int(payload["port"]), timeout=5) as client:
-        if payload.get("username"):
-            client.starttls()
-            client.login(str(payload["username"]), str(payload["password"]))
-        client.send_message(mail)

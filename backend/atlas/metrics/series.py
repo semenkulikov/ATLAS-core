@@ -36,6 +36,26 @@ def write_sample(conn: sqlite3.Connection, sample: HostSample) -> None:
     for nic in sample.network:
         points.append((f"host.net.{nic.name}.rx_bytes", ts, float(nic.rx_bytes)))
         points.append((f"host.net.{nic.name}.tx_bytes", ts, float(nic.tx_bytes)))
+    for unit in sample.units:
+        if unit.memory_bytes is not None:
+            points.append((f"host.service.{unit.name}.memory_bytes", ts, float(unit.memory_bytes)))
+        if unit.cpu_usage_usec is not None:
+            points.append(
+                (f"host.service.{unit.name}.cpu_usage_usec", ts, float(unit.cpu_usage_usec))
+            )
+    for container in sample.containers:
+        if container.memory_bytes is not None:
+            points.append(
+                (f"host.container.{container.name}.memory_bytes", ts, float(container.memory_bytes))
+            )
+        if container.cpu_usage_usec is not None:
+            points.append(
+                (
+                    f"host.container.{container.name}.cpu_usage_usec",
+                    ts,
+                    float(container.cpu_usage_usec),
+                )
+            )
     conn.executemany(
         "INSERT OR REPLACE INTO metric_points (series, ts, value) VALUES (?, ?, ?)",
         points,
@@ -121,7 +141,7 @@ def list_series(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
         "SELECT DISTINCT series FROM metric_points WHERE series LIKE 'host.%' ORDER BY series"
     ).fetchall()
-    return [str(row["series"]) for row in rows][:24]
+    return [str(row["series"]) for row in rows][:36]
 
 
 def query_series(

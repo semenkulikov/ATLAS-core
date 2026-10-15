@@ -10,6 +10,7 @@ ExecStart=/opt/atlas/.venv/bin/atlas serve --db /var/lib/atlas/atlas.db --root /
 RuntimeDirectory=atlas
 RuntimeDirectoryPreserve=yes
 StateDirectory=atlas
+StateDirectoryMode=0700
 UMask=0117
 NoNewPrivileges=yes
 ProtectSystem=strict

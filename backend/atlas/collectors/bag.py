@@ -20,6 +20,35 @@ from atlas.domain import (
 )
 
 
+def _privileged_command(helper_socket: str, argv: list[str]) -> CommandResult | None:
+    """Ask the helper for a fixed inventory command the atlas user cannot run."""
+    from atlas.helper.client import read_command
+    from atlas.helper.protocol import ProtocolError, build_plan
+
+    try:
+        build_plan("read.command", {"argv": argv})
+    except ProtocolError:
+        return None
+    try:
+        answer = read_command(helper_socket, argv)
+    except (OSError, ValueError):
+        return None
+    if not answer.get("ok"):
+        code = int(answer.get("code") or 1)
+        return CommandResult(
+            tuple(argv),
+            code,
+            str(answer.get("stdout") or ""),
+            str(answer.get("stderr") or answer.get("error") or ""),
+        )
+    return CommandResult(
+        tuple(argv),
+        int(answer.get("code") or 0),
+        str(answer.get("stdout") or ""),
+        str(answer.get("stderr") or ""),
+    )
+
+
 def declare(
     collector: str,
     kind: str,
@@ -52,6 +81,10 @@ class Bag:
     def command(self, view: HostView, argv: list[str], *, timeout: float = 8.0) -> CommandResult:
         view.commands_run.append(" ".join(argv))
         result = view.runner.run(argv, timeout=timeout)
+        if not result.stdout and result.code not in {0, 127} and view.helper_socket:
+            escalated = _privileged_command(view.helper_socket, argv)
+            if escalated is not None:
+                result = escalated
         if result.stdout or result.code == 0:
             status = "ok"
             reason = None

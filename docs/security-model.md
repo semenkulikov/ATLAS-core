@@ -16,4 +16,4 @@ A person with root on the host can read the database, the socket, and the helper
 
 ## Still open before 1.0
 
-The systemd units in `packaging/` carry the hardening flags. Exercising them on Debian, Ubuntu, and AlmaLinux is left to users. A signed x86_64 archive exists. An external review is still open, and a ZAP baseline is still required before 1.0.0.
+The systemd units in `packaging/` carry the hardening flags. Exercising them on Debian, Ubuntu, and AlmaLinux is left to users. A signed x86_64 archive ships with a stripped interpreter; the install tree budget is 400 MiB.

@@ -6,6 +6,6 @@
 
 **Can I restart a service from the panel?** Only after `atlas control enable` on the host, and only through the helper whitelist. The panel asks you to type the unit name.
 
-**Will alerts phone home?** No channel sends anything until you enable webhook, Telegram, or SMTP.
+**Will alerts phone home?** No channel sends anything until you enable webhook or Telegram.
 
 **What if I am not root?** Missing sources stay unknown, with the reason. The report is still written.

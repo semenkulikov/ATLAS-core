@@ -77,6 +77,14 @@ const en = {
   csrf: "The page token did not match. Reload and try again.",
   follow: "Follow",
   pause: "Pause",
+  alerts: "Alerts",
+  channelKind: "Channel",
+  channelTarget: "Target",
+  channelEnable: "Enable and send off this host",
+  channelSaved: "Channel saved.",
+  save: "Save",
+  on: "on",
+  off: "off",
 };
 
 const ru: typeof en = {
@@ -139,6 +147,14 @@ const ru: typeof en = {
   csrf: "Токен страницы не совпал. Обновите страницу и повторите.",
   follow: "Следить",
   pause: "Пауза",
+  alerts: "Оповещения",
+  channelKind: "Канал",
+  channelTarget: "Адрес",
+  channelEnable: "Включить и отправлять наружу",
+  channelSaved: "Канал сохранён.",
+  save: "Сохранить",
+  on: "вкл",
+  off: "выкл",
 };
 
 const dictionaries = { en, ru };

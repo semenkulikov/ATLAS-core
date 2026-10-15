@@ -7,6 +7,7 @@ macOS, where that socket option does not exist.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -16,7 +17,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
-from atlas.helper.protocol import Plan, ProtocolError, build_plan
+from atlas.helper.protocol import Plan, ProtocolError, build_plan, readable_path
 from atlas.helper.sshkeys import change_key
 from atlas.redact import mask_secrets
 
@@ -36,6 +37,7 @@ class HelperServer:
         peer_of: PeerLookup | None = None,
         keys_root: Path | None = None,
         delay_scale: float = 1.0,
+        socket_gid: int | None = None,
     ) -> None:
         self.path = path
         self.allowed_uids = allowed_uids
@@ -43,6 +45,7 @@ class HelperServer:
         self.peer_of = peer_of or _peer_uid
         self.keys_root = keys_root or Path("/")
         self.delay_scale = delay_scale
+        self.socket_gid = socket_gid
         self._pending: dict[str, threading.Timer] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -56,6 +59,8 @@ class HelperServer:
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         server.bind(str(self.path))
         os.chmod(self.path, 0o660)  # nosec B103
+        if self.socket_gid is not None:
+            os.chown(self.path, 0, self.socket_gid)
         server.listen(4)
         server.settimeout(0.2)
         self._sock = server
@@ -118,9 +123,60 @@ class HelperServer:
             except ProtocolError as exc:
                 return {"ok": False, "error": exc.message}
             return {"ok": True, "result": message}
+        if plan.op == "read.file":
+            return self._read_file(plan.confirm)
+        if plan.op == "read.engine":
+            route = params.get("path")
+            if not isinstance(route, str):
+                return {"ok": False, "error": "An engine path is required."}
+            return self._read_engine(route)
         if plan.delay_seconds:
             return self._schedule(plan)
         return self._run(plan)
+
+    def _read_file(self, target: str) -> dict[str, object]:
+        if not readable_path(target):
+            return {"ok": False, "error": "That file is not on the read whitelist."}
+        if self.keys_root != Path("/"):
+            path = (self.keys_root / target.lstrip("/")).resolve()
+            try:
+                path.relative_to(self.keys_root.resolve())
+            except ValueError:
+                return {"ok": False, "error": "The path leaves the keys root."}
+        else:
+            path = Path(target)
+        try:
+            data = path.read_bytes()[:1_048_576]
+        except FileNotFoundError:
+            return {"ok": False, "error": "file not found", "status": "absent"}
+        except OSError as exc:
+            return {"ok": False, "error": exc.strerror or "unreadable", "status": "unavailable"}
+        if b"PRIVATE KEY" in data:
+            return {"ok": False, "error": "private key material is never read"}
+        text = data.decode("utf-8", errors="replace")
+        return {
+            "ok": True,
+            "text": text,
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "status": "ok",
+        }
+
+    def _read_engine(self, route: str) -> dict[str, object]:
+        from atlas.collectors.platforms import engine_get
+
+        for sock in (
+            Path("/var/run/docker.sock"),
+            Path("/run/docker.sock"),
+            Path("/run/podman/podman.sock"),
+        ):
+            if not sock.exists():
+                continue
+            try:
+                body = engine_get(sock, route)
+            except Exception as exc:
+                return {"ok": False, "error": f"{sock}: {exc.__class__.__name__}"}
+            return {"ok": True, "body": body, "origin": str(sock)}
+        return {"ok": False, "error": "container engine", "status": "absent"}
 
     def _schedule(self, plan: Plan) -> dict[str, object]:
         token = os.urandom(8).hex()

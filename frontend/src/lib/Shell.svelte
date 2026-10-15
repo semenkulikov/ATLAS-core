@@ -17,8 +17,10 @@
   let route = $state<RouteId>("overview");
   let palette = $state(false);
   let query = $state("");
+  let hits = $state<{ path: string; project_id: string | null; excerpt: string }[]>([]);
   let factId = $state<number | null>(null);
   let armed = $state("");
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   const visible = $derived(
     routes.filter((id) => copy(lang, id).toLowerCase().includes(query.toLowerCase())),
@@ -28,6 +30,7 @@
     location.hash = `#/${id}`;
     palette = false;
     query = "";
+    hits = [];
   }
 
   function setLang(next: Lang): void {
@@ -35,6 +38,29 @@
     localStorage.setItem("atlas.lang", next);
     document.documentElement.lang = next;
   }
+
+  function runSearch(value: string): void {
+    clearTimeout(searchTimer);
+    if (value.trim().length < 2) {
+      hits = [];
+      return;
+    }
+    searchTimer = setTimeout(() => {
+      void api<{ hits: { path: string; project_id: string | null; excerpt: string }[] }>(
+        `/api/v1/search?q=${encodeURIComponent(value.trim())}`,
+      )
+        .then((body) => {
+          hits = body.hits.slice(0, 8);
+        })
+        .catch(() => {
+          hits = [];
+        });
+    }, 200);
+  }
+
+  $effect(() => {
+    if (palette) runSearch(query);
+  });
 
   onMount(() => {
     const apply = () => {
@@ -55,8 +81,11 @@
         return;
       }
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      if (armed === "g" && event.key === "p") {
-        go("projects");
+      if (armed === "g") {
+        if (event.key === "p") go("projects");
+        if (event.key === "s") go("services");
+        if (event.key === "m") go("monitoring");
+        if (event.key === "l") go("logs");
         armed = "";
         return;
       }
@@ -67,6 +96,7 @@
     return () => {
       window.removeEventListener("hashchange", onHash);
       window.removeEventListener("keydown", onKey);
+      clearTimeout(searchTimer);
     };
   });
 
@@ -164,6 +194,23 @@
           </li>
         {/each}
       </ul>
+      {#if hits.length > 0}
+        <p class="mt-3 px-2 text-xs text-fog">{copy(lang, "search")}</p>
+        <ul class="mt-1">
+          {#each hits as hit (`${hit.path}:${hit.excerpt}`)}
+            <li>
+              <button
+                type="button"
+                class="w-full rounded-md px-2 py-1.5 text-left text-sm text-mist hover:bg-graphite"
+                onclick={() => go(hit.project_id ? "projects" : "overview")}
+              >
+                <span class="font-mono text-xs text-fog">{hit.path}</span>
+                <span class="mt-0.5 block truncate text-mist">{hit.excerpt}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
   </div>
 {/if}

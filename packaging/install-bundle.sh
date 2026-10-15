@@ -3,6 +3,8 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+# shellcheck disable=SC1091
+. "$root/packaging/pick-uid.sh"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Installing onto / requires root." >&2
@@ -18,15 +20,18 @@ if [ ! -x "$shell" ]; then
   shell=/sbin/nologin
 fi
 if ! id atlas >/dev/null 2>&1; then
-  useradd --system --home-dir /var/lib/atlas --shell "$shell" atlas
+  uid=$(pick_atlas_uid)
+  useradd --system --uid "$uid" --home-dir /var/lib/atlas --shell "$shell" atlas
+else
+  uid=$(id -u atlas)
 fi
-uid=$(id -u atlas)
 
 mkdir -p /opt/atlas/frontend /etc/atlas /var/lib/atlas /usr/lib/systemd/system /usr/lib/tmpfiles.d
 rm -rf /opt/atlas/python /opt/atlas/app /opt/atlas/frontend/dist
 cp -a "$root/python" /opt/atlas/python
 cp -a "$root/app" /opt/atlas/app
 cp -a "$root/frontend/dist" /opt/atlas/frontend/dist
+cp -a "$root/packaging" /opt/atlas/packaging
 chown -R atlas:atlas /var/lib/atlas
 chmod 0700 /var/lib/atlas
 
@@ -57,5 +62,24 @@ printf '%s\n' "Installed from a signed archive. The interpreter is /opt/atlas/py
 
 systemctl daemon-reload
 systemctl enable --now atlas.service atlas-helper.service
+
+i=0
+while [ "$i" -lt 50 ]; do
+  if [ -S /run/atlas/web.sock ]; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 0.1
+done
+if [ ! -S /run/atlas/web.sock ]; then
+  echo "The panel socket did not appear." >&2
+  systemctl --no-pager --full status atlas.service >&2 || true
+  exit 1
+fi
+
 echo "installed"
 ls -l /run/atlas/web.sock
+echo "Open the panel from your workstation:"
+echo "  ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@$(hostname -f 2>/dev/null || hostname)"
+echo "One-time enrollment token:"
+sudo -u atlas env PYTHONPATH=/opt/atlas/app /opt/atlas/python/bin/python3 -m atlas.cli.main token new --db /var/lib/atlas/atlas.db

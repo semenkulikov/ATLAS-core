@@ -17,10 +17,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--keys-root", default="/")
     args = parser.parse_args(argv)
+    socket_gid = None
+    try:
+        import pwd
+
+        socket_gid = int(pwd.getpwuid(args.uid).pw_gid)
+    except KeyError:
+        socket_gid = None
     server = HelperServer(
         Path(args.socket),
         allowed_uids=frozenset({args.uid, 0}),
         keys_root=Path(args.keys_root),
+        socket_gid=socket_gid,
     )
     try:
         server.serve_forever()
