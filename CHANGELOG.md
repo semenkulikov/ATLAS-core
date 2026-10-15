@@ -13,3 +13,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). Versions fol
 - A scan continues when a project directory is unreadable. An empty panel says so in the selected language.
 - Hostname and architecture follow GNU uname's fixed field order.
 - The panel socket is group-readable. Oneshot writes a report when `atlas` is installed. Charts follow the series that were stored.
+- Stopping one unit no longer deletes the shared runtime directory of the other.
