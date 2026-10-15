@@ -19,6 +19,7 @@ PRODUCT_PATHS = (
     "etc/atlas",
     "usr/lib/systemd/system/atlas.service",
     "usr/lib/systemd/system/atlas-helper.service",
+    "usr/lib/tmpfiles.d/atlas.conf",
 )
 DATA_PATH = "var/lib/atlas"
 Runner = Callable[[list[str]], None]

@@ -36,7 +36,7 @@ npm run build --prefix frontend
 
 Каналы оповещений выключены, пока владелец их не включит. `atlas doctor --db <файл>` показывает права файла и то, может ли канал уйти с хоста. `atlas status` печатает версию. `atlas expose` печатает правила слушателя. `atlas uninstall --prefix <путь>` удаляет файлы продукта и оставляет базу, если не передан `--purge`.
 
-`packaging/install.sh` создаёт `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas` и юниты systemd. Релиз он не скачивает. Аргумент `--url` завершает скрипт с ошибкой, пока нет подписанного архива.
+`packaging/install.sh` создаёт `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas` и юниты systemd из git. Релиз он не скачивает. Подписанный архив x86_64 ставится через `packaging/install-bundle.sh` после `minisign -V`. Аргумент `--url` по-прежнему завершает скрипт с ошибкой.
 
 Модель безопасности: [docs/security-model.ru.md](docs/security-model.ru.md). Детекторы: [docs/detectors.ru.md](docs/detectors.ru.md). Команды, вопросы и публикация: [docs/cli.ru.md](docs/cli.ru.md), [docs/faq.ru.md](docs/faq.ru.md), [docs/publish.ru.md](docs/publish.ru.md). Список читаемых путей печатает `atlas manifest`.
 

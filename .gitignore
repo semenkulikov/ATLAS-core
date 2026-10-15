@@ -221,6 +221,7 @@ __marimo__/
 
 # ATLAS
 .tools/
+dist/
 node_modules/
 frontend/dist/
 *.sqlite

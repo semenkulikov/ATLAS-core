@@ -36,7 +36,7 @@ npm run build --prefix frontend
 
 Alert channels stay off until the owner enables one. `atlas doctor --db <file>` reports file mode and whether a channel can leave the host. `atlas status` prints the version. `atlas expose` prints the listener rules. `atlas uninstall --prefix <path>` removes product files and keeps the database unless `--purge` is set.
 
-`packaging/install.sh` creates `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas`, and the systemd units. It does not download a release. Passing `--url` exits with an error until a signed archive exists.
+`packaging/install.sh` creates `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas`, and the systemd units from a git checkout. It does not download a release. The signed x86_64 archive is installed with `packaging/install-bundle.sh` after `minisign -V`. Passing `--url` still exits with an error.
 
 The security model is in [docs/security-model.md](docs/security-model.md) ([русский](docs/security-model.ru.md)). Detector notes are in [docs/detectors.md](docs/detectors.md). Commands, questions, and publishing notes are in [docs/cli.md](docs/cli.md), [docs/faq.md](docs/faq.md), and [docs/publish.md](docs/publish.md). Collected paths are printed by `atlas manifest`.
 
