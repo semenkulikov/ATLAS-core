@@ -171,9 +171,7 @@ class HelperServer:
         path = Path(target)
         try:
             names = sorted(
-                entry.name
-                for entry in path.iterdir()
-                if entry.is_file() and not entry.is_symlink()
+                entry.name for entry in path.iterdir() if entry.is_file() and not entry.is_symlink()
             )
         except FileNotFoundError:
             return {"ok": False, "error": "directory not found", "status": "absent"}
