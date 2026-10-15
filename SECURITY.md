@@ -10,7 +10,7 @@ The maintainer aims to answer within 7 days and to publish a fix before describi
 
 ## What a release is
 
-Version 1.0.0 has a signed x86_64 archive. Verify `atlas-1.0.0-linux-x86_64.tar.gz` with `packaging/minisign.pub` and the published checksum before installing. `packaging/install.sh` still refuses `--url`. Do not pipe a downloaded script into a shell.
+Version 1.0.0 ships a signed x86_64 archive on [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest). Verify `atlas-1.0.0-linux-x86_64.tar.gz` with the published `minisign.pub` and `.sha256`, then run the archive's `install.sh`. `packaging/install.sh --url` still refuses to download for you. Do not pipe an unsigned script into a shell.
 
 ## Scope
 

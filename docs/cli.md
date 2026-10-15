@@ -14,4 +14,6 @@
 | `atlas export --db <file>` | Latest completed scan as Markdown, JSON, and HTML. |
 | `atlas uninstall --prefix <path> [--purge]` | Remove product files. The database stays unless `--purge`. |
 
+Production install uses the signed archive's `install.sh` (see [README.md](../README.md)). `packaging/install.sh` is for a git checkout and does not download a release.
+
 `atlas-helper --socket <path> --uid <web uid>` is the root process. It is not started by `serve`.

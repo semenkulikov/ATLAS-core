@@ -38,7 +38,7 @@ from atlas.application.scan import run_scan
 from atlas.collectors.view import open_view
 from atlas.logging import log_event
 from atlas.metrics.sampler import default_sampler
-from atlas.metrics.series import list_series, query_series, write_sample
+from atlas.metrics.series import list_series, query_series
 from atlas.security.accounts import (
     AccessError,
     Actor,

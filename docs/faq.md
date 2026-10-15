@@ -1,5 +1,7 @@
 # FAQ
 
+**How do I install ATLAS?** Download the signed x86_64 archive from [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest), verify with minisign and the checksum, extract, then run `sudo ./atlas-1.0.0-linux-x86_64/install.sh`. Details are in the README.
+
 **Does a scan open a port?** No. `atlas scan` writes a report and does not listen.
 
 **Where do secrets go?** They are not stored. Excerpts are masked, `/etc/shadow` and private keys are refused, and `.env` files keep key names only.

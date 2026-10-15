@@ -29,7 +29,9 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --url)
-      echo "Release downloads stay disabled until a signed release exists." >&2
+      echo "This script does not download a release." >&2
+      echo "Install the signed archive from GitHub Releases, then run its install.sh." >&2
+      echo "See README.md for the download and verify steps." >&2
       exit 2
       ;;
     *)

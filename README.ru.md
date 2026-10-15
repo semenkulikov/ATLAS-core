@@ -1,43 +1,111 @@
 # ATLAS
 
-ATLAS — открытый агент инвентаризации одного Linux-сервера. Он записывает, что есть на машине, и для каждого утверждения указывает файл, команду или ответ API. Если источник прочитать нельзя, поле остаётся неопределённым.
+**Агент инвентаризации одного Linux-сервера.**  
+ATLAS фиксирует, что работает на машине, и для каждого утверждения сохраняет файл, команду или ответ API. Непрочитанный источник остаётся неизвестным. Скан не открывает сетевой порт и ничего не отправляет с хоста.
 
-Сканирование не открывает сетевой порт и ничего не отправляет с хоста.
+[![Release](https://img.shields.io/github/v/release/semenkulikov/ATLAS-core?label=release)](https://github.com/semenkulikov/ATLAS-core/releases/latest)
+[![License](https://img.shields.io/github/license/semenkulikov/ATLAS-core)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/semenkulikov/ATLAS-core/ci.yml?branch=main&label=CI)](https://github.com/semenkulikov/ATLAS-core/actions)
+[![English](https://img.shields.io/badge/README-EN-blue)](README.md)
+
+---
+
+## Установка (подписанный архив x86_64)
+
+Проверено на **Ubuntu 24.04 x86_64**. Debian, AlmaLinux и arm64 пока остаются задачей пользователей.
+
+После загрузки и проверки подписи установка — одна команда:
+
+```bash
+VER=1.0.0
+BASE="https://github.com/semenkulikov/ATLAS-core/releases/download/v${VER}"
+
+curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz"
+curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz.minisig"
+curl -fsSLO "${BASE}/atlas-${VER}-linux-x86_64.tar.gz.sha256"
+curl -fsSLO "${BASE}/minisign.pub"
+
+minisign -V -p minisign.pub -m "atlas-${VER}-linux-x86_64.tar.gz"
+shasum -a 256 -c "atlas-${VER}-linux-x86_64.tar.gz.sha256"
+
+tar -xzf "atlas-${VER}-linux-x86_64.tar.gz"
+sudo "./atlas-${VER}-linux-x86_64/install.sh"
+```
+
+`install.sh` создаёт пользователя `atlas` (свободный системный UID), раскладывает `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas` (режим `0700`), включает юниты systemd, ждёт `/run/atlas/web.sock` и печатает команду туннеля плюс **одноразовый токен регистрации**.
+
+Не прогоняйте неподписанный скрипт через pipe в shell. `packaging/install.sh --url` специально завершается с ошибкой: копия из git сама архив не скачивает.
+
+### Открыть панель
+
+```bash
+ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@YOUR_HOST
+```
+
+Откройте `http://127.0.0.1:8765` и зарегистрируйте владельца токеном, паролем и TOTP.
+
+### Удаление
+
+```bash
+sudo -u atlas env PYTHONPATH=/opt/atlas/app \
+  /opt/atlas/python/bin/python3 -m atlas.cli.main uninstall --prefix / --purge
+```
+
+---
+
+## Что внутри
+
+| Область | Поведение |
+| --- | --- |
+| Инвентаризация | ОС, пользователи, systemd, порты, nginx/сайты, пакеты, Docker/Podman через root-помощника |
+| Доказательства | У каждого факта есть файл, команда или путь API; секреты маскируются |
+| Панель | FastAPI на Unix-сокете; первая учётка — токен + пароль + TOTP |
+| Метрики | Ряды хоста и cgroup CPU/память служб и контейнеров; живой поток 1 с, пока открыт Monitor |
+| Оповещения | Только webhook и Telegram; оба выключены, пока владелец не включит канал |
+| Управление | Выключено до `atlas control enable`; действия идут через белый список помощника |
+| Размер | Свой stripped CPython; бюджет 400 МиБ (~141 МиБ дерева в 1.0.0) |
+
+---
+
+## Разработка из git
 
 ```bash
 uv sync --project backend --group dev
-uv run --project backend python -m atlas.cli.main scan --root fixtures/partial-host --output /tmp/atlas-report
+uv run --project backend python -m atlas.cli.main scan \
+  --root fixtures/partial-host --output /tmp/atlas-report
+
+npm install --prefix frontend && npm run build --prefix frontend
+uv run --project backend python -m atlas.cli.main token new --db /tmp/atlas.db
+uv run --project backend python -m atlas.cli.main serve \
+  --db /tmp/atlas.db --root fixtures/partial-host --tcp 127.0.0.1:8765
 ```
 
-Отчёт пишется в Markdown, JSON и HTML. `--root /` сканирует текущую машину. `--db` сохраняет снимок; без этого флага база временная и после команды остаётся только отчёт.
-
-Список файлов и команд, которые читает ATLAS, собирается из объявлений сборщиков:
+Список источников сборщиков:
 
 ```bash
 uv run --project backend python -m atlas.cli.main manifest
 uv run --project backend python -m atlas.cli.main manifest --lang ru
 ```
 
-Сборщик метрик можно заменить. См. [заметку о языке сборщика](docs/adr/0001-collector-language.md).
+Установка из дерева git (без скачивания релиза): `sudo packaging/install.sh`.
 
-API панели слушает Unix-сокет. `atlas token new` печатает одноразовый токен: первая учётная запись создаётся им, паролем и кодом TOTP. TCP выключен, пока не передан `--tcp`, а публичный адрес без TLS и списка разрешённых адресов отклоняется. Управление хостом выключено, пока для той же базы не выполнена команда `atlas control enable`. После этого панель обращается к отдельному root-помощнику и сама эти команды не запускает.
+---
 
-```bash
-uv run --project backend python -m atlas.cli.main token new --db /tmp/atlas.db
-uv run --project backend python -m atlas.cli.main serve --db /tmp/atlas.db --root fixtures/partial-host --tcp 127.0.0.1:8765
-```
+## Документация
 
-Соберите панель, и тот же процесс отдаст её из `frontend/dist`:
+| Тема | RU | EN |
+| --- | --- | --- |
+| Модель безопасности | [docs/security-model.ru.md](docs/security-model.ru.md) | [docs/security-model.md](docs/security-model.md) |
+| CLI | [docs/cli.ru.md](docs/cli.ru.md) | [docs/cli.md](docs/cli.md) |
+| FAQ | [docs/faq.ru.md](docs/faq.ru.md) | [docs/faq.md](docs/faq.md) |
+| Публикация панели | [docs/publish.ru.md](docs/publish.ru.md) | [docs/publish.md](docs/publish.md) |
+| Детекторы | [docs/detectors.ru.md](docs/detectors.ru.md) | [docs/detectors.md](docs/detectors.md) |
+| Политика безопасности | — | [SECURITY.md](SECURITY.md) |
 
-```bash
-npm install --prefix frontend
-npm run build --prefix frontend
-```
+Changelog: [CHANGELOG.md](CHANGELOG.md) · Релизы: [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest)
 
-Каналы оповещений выключены, пока владелец их не включит. `atlas doctor --db <файл>` показывает права файла и то, может ли канал уйти с хоста. `atlas status` печатает версию. `atlas expose` печатает правила слушателя. `atlas uninstall --prefix <путь>` удаляет файлы продукта и оставляет базу, если не передан `--purge`.
+---
 
-`packaging/install.sh` создаёт `/opt/atlas`, `/etc/atlas`, `/var/lib/atlas` и юниты systemd из git. Релиз он не скачивает. Подписанный архив x86_64 ставится через `packaging/install-bundle.sh` после `minisign -V`. Аргумент `--url` по-прежнему завершает скрипт с ошибкой.
+## Лицензия
 
-Модель безопасности: [docs/security-model.ru.md](docs/security-model.ru.md). Детекторы: [docs/detectors.ru.md](docs/detectors.ru.md). Команды, вопросы и публикация: [docs/cli.ru.md](docs/cli.ru.md), [docs/faq.ru.md](docs/faq.ru.md), [docs/publish.ru.md](docs/publish.ru.md). Список читаемых путей печатает `atlas manifest`.
-
-Лицензия: Apache-2.0.
+Apache-2.0. См. [LICENSE](LICENSE) и [NOTICE](NOTICE).

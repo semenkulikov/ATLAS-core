@@ -14,4 +14,6 @@
 | `atlas export --db <файл>` | Последний завершённый снимок в Markdown, JSON и HTML. |
 | `atlas uninstall --prefix <путь> [--purge]` | Удаляет файлы продукта. База остаётся без `--purge`. |
 
+Продакшен-установка — `install.sh` из подписанного архива (см. [README.ru.md](../README.ru.md)). `packaging/install.sh` — для копии из git и релиз сам не скачивает.
+
 `atlas-helper --socket <путь> --uid <uid веб-процесса>` — процесс root. `serve` его не запускает.
