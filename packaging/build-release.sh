@@ -78,9 +78,13 @@ else
 fi
 
 tar -C "$root/dist" -czf "$root/dist/${name}.tar.gz" "$name"
-if command -v shasum >/dev/null 2>&1; then
-  shasum -a 256 "$root/dist/${name}.tar.gz" > "$root/dist/${name}.tar.gz.sha256"
-elif command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "$root/dist/${name}.tar.gz" > "$root/dist/${name}.tar.gz.sha256"
-fi
+# Basename only — get-atlas.sh runs shasum -c next to the tarball.
+(
+  cd "$root/dist"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+  fi
+)
 echo "wrote $root/dist/${name}.tar.gz"
