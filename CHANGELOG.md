@@ -11,3 +11,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). Versions fol
 - The shop fixture has an expected fact list. `atlas export` writes the latest scan. Metric storage drops the oldest points past 200 MiB.
 - First-time setup shows a QR code for the authenticator app.
 - A scan continues when a project directory is unreadable. An empty panel says so in the selected language.
+- Hostname and architecture follow GNU uname's fixed field order.

@@ -98,7 +98,8 @@ class OsCollector:
         uname = bag.command(view, UNAME)
         if uname.stdout.strip():
             parts = uname.stdout.split()
-            labels = ("kernel.name", "kernel.release", "arch", "hostname")
+            # GNU uname prints a fixed order: kernel, nodename, release, machine.
+            labels = ("kernel.name", "hostname", "kernel.release", "arch")
             for label, value in zip(labels, parts, strict=False):
                 bag.add_command("host", label, value, UNAME, uname.stdout.strip())
                 identity[label] = value
