@@ -35,7 +35,7 @@
     items = [];
     selected = null;
     void load().catch((error: unknown) => {
-      message = shownError(error, copy(lang, "noScan"));
+      message = shownError(error, lang);
     });
   });
 

@@ -20,7 +20,7 @@
         rows = payload.changes;
       })
       .catch((error: unknown) => {
-        message = shownError(error, copy(lang, "noScan"));
+        message = shownError(error, lang);
       });
   });
 </script>

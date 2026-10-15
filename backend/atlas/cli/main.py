@@ -153,6 +153,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         uvicorn.run(create_app(store, settings), host=host, port=int(port_text), log_config=None)
         return 0
     socket_path = args.socket or "/run/atlas/web.sock"
+    _tighten_socket(socket_path)
     settings = Settings(
         Path(args.root),
         tls=bool(args.tls),
@@ -161,6 +162,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
     )
     uvicorn.run(create_app(store, settings), uds=socket_path, log_config=None)
     return 0
+
+
+def _tighten_socket(socket_path: str) -> None:
+    """Make the panel socket group-readable. A world-writable socket is refused."""
+    import os
+    import threading
+    import time
+
+    def once() -> None:
+        for _ in range(50):
+            if os.path.exists(socket_path):
+                os.chmod(socket_path, 0o660)  # nosec B103
+                return
+            time.sleep(0.1)
+
+    threading.Thread(target=once, name="atlas-socket", daemon=True).start()
 
 
 def _start_sampler(store: Store) -> None:

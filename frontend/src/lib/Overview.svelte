@@ -19,7 +19,7 @@
         projects = listed.items;
       })
       .catch((error: unknown) => {
-        message = shownError(error, copy(lang, "noScan"));
+        message = shownError(error, lang);
       });
   });
 

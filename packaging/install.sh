@@ -42,7 +42,11 @@ if [ "$oneshot" -eq 1 ]; then
   if [ "$dry" -eq 1 ]; then
     exit 0
   fi
-  echo "Run: atlas scan --format md --format json --format html"
+  if command -v atlas >/dev/null 2>&1; then
+    atlas scan --format md --format json --format html --output atlas-report
+  else
+    echo "Run: atlas scan --format md --format json --format html"
+  fi
   exit 0
 fi
 
@@ -77,7 +81,18 @@ mkdir -p \
 sed "s/__UID__/$uid/" "$root/packaging/atlas-helper.service" \
   > "$prefix/usr/lib/systemd/system/atlas-helper.service"
 cp "$root/packaging/atlas.service" "$prefix/usr/lib/systemd/system/atlas.service"
-printf '%s\n' "Install the application into /opt/atlas and create its virtualenv before starting the units." \
+if [ "$prefix" = / ] && command -v python3 >/dev/null 2>&1; then
+  if [ ! -x "$prefix/opt/atlas/.venv/bin/atlas" ]; then
+    python3 -m venv "$prefix/opt/atlas/.venv"
+    "$prefix/opt/atlas/.venv/bin/pip" install -e "$root/backend"
+  fi
+  if [ -f "$root/frontend/package.json" ] && [ ! -f "$root/frontend/dist/index.html" ] && command -v npm >/dev/null 2>&1; then
+    npm --prefix "$root/frontend" ci
+    npm --prefix "$root/frontend" run build
+  fi
+  chown -R atlas:atlas "$prefix/opt/atlas/.venv" "$prefix/var/lib/atlas"
+fi
+printf '%s\n' "The application lives in /opt/atlas. Repeat this script to repair units." \
   > "$prefix/etc/atlas/README"
 
 if [ "$prefix" = / ] && [ "$start" -eq 1 ]; then

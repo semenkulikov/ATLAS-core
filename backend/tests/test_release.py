@@ -280,6 +280,28 @@ def test_oneshot_does_not_install_units(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stderr
     assert "oneshot" in completed.stdout
     assert not (tmp_path / "root").exists()
+    report = tmp_path / "out"
+    report.mkdir()
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    atlas = fake / "atlas"
+    atlas.write_text(
+        "#!/bin/sh\nfor ext in md json html; do printf report > atlas-report.$ext; done\n",
+        encoding="utf-8",
+    )
+    atlas.chmod(0o755)
+    wrote = subprocess.run(
+        ["sh", str(script), "--oneshot"],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=report,
+        env={**os.environ, "PATH": f"{fake}{os.pathsep}{os.environ.get('PATH', '')}"},
+    )
+    assert wrote.returncode == 0, wrote.stderr
+    assert (report / "atlas-report.md").is_file()
+    assert (report / "atlas-report.json").is_file()
+    assert (report / "atlas-report.html").is_file()
 
 
 def _scan(store: Store) -> int:

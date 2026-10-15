@@ -257,12 +257,12 @@ def _unit_files(view: HostView, bag: Bag) -> dict[str, tuple[str, UnitFile, str 
     chosen: dict[str, tuple[str, UnitFile, str | None]] = {}
     count = 0
     for directory in _UNIT_DIRS:
-        for logical in files_under(view, directory, limit=500):
+        for logical in files_under(view, directory, limit=4000):
             if not logical.endswith((".service", ".timer")):
                 continue
             count += 1
-            if count > 500:
-                bag.note(directory, "unavailable", "unit file list truncated at 500")
+            if count > 4000:
+                bag.note(directory, "unavailable", "unit file list truncated at 4000")
                 return chosen
             outcome = bag.read(view, logical)
             if not outcome.ok or outcome.text is None:

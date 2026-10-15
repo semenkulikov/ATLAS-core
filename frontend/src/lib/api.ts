@@ -1,5 +1,7 @@
 /** Shared shapes returned by the inventory API. */
 
+import { copy, type Lang } from "./i18n";
+
 export type Entity = {
   kind: string;
   key: string;
@@ -69,8 +71,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
-export function shownError(error: unknown, fallback: string): string {
-  if (error instanceof ApiError && error.code === "scan.missing") return fallback;
+export function shownError(error: unknown, lang: Lang): string {
+  if (error instanceof ApiError) {
+    if (error.code === "scan.missing") return copy(lang, "noScan");
+    if (error.code === "auth.rejected") return copy(lang, "rejected");
+    if (error.code === "auth.forbidden") return copy(lang, "forbidden");
+    if (error.code === "auth.csrf") return copy(lang, "csrf");
+  }
   if (error instanceof Error && error.message) return error.message;
-  return fallback;
+  return copy(lang, "error");
 }

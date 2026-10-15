@@ -116,6 +116,14 @@ def _write_buckets(conn: sqlite3.Connection, rows: list[sqlite3.Row], step: int)
     )
 
 
+def list_series(conn: sqlite3.Connection) -> list[str]:
+    """Return the host series that already have at least one point."""
+    rows = conn.execute(
+        "SELECT DISTINCT series FROM metric_points WHERE series LIKE 'host.%' ORDER BY series"
+    ).fetchall()
+    return [str(row["series"]) for row in rows][:12]
+
+
 def query_series(
     conn: sqlite3.Connection, series: str, start: int, end: int, step: int
 ) -> list[dict[str, float | int]]:

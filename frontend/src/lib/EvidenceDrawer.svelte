@@ -16,7 +16,7 @@
         rows = payload.evidence;
       })
       .catch((error: unknown) => {
-        message = shownError(error, copy(lang, "error"));
+        message = shownError(error, lang);
       });
   });
 </script>

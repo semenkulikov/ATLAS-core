@@ -58,6 +58,11 @@ describe("panel copy", () => {
       filter: "",
       pattern: "",
       scanCode: "",
+      rejected: "",
+      forbidden: "",
+      csrf: "",
+      follow: "",
+      pause: "",
     }) as CopyKey[];
     for (const key of keys) {
       expect(copy("en", key).length).toBeGreaterThan(0);

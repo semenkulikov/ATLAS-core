@@ -9,6 +9,7 @@ Group=atlas
 ExecStart=/opt/atlas/.venv/bin/atlas serve --db /var/lib/atlas/atlas.db --root / --helper-socket /run/atlas/helper.sock
 RuntimeDirectory=atlas
 StateDirectory=atlas
+UMask=0117
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

@@ -38,7 +38,7 @@ from atlas.application.scan import run_scan
 from atlas.collectors.view import open_view
 from atlas.logging import log_event
 from atlas.metrics.sampler import default_sampler
-from atlas.metrics.series import query_series, write_sample
+from atlas.metrics.series import list_series, query_series, write_sample
 from atlas.security.accounts import (
     AccessError,
     Actor,
@@ -124,6 +124,7 @@ def create_app(
     app.add_api_route("/api/v1/edges", edges, methods=["GET"])
     app.add_api_route("/api/v1/scans", scans, methods=["GET"])
     app.add_api_route("/api/v1/scans", start_scan, methods=["POST"])
+    app.add_api_route("/api/v1/metrics/series", metric_series, methods=["GET"])
     app.add_api_route("/api/v1/metrics/query", metrics, methods=["GET"])
     app.add_api_route("/api/v1/logs", logs, methods=["GET"])
     app.add_api_route("/api/v1/export", export, methods=["GET"])
@@ -491,6 +492,11 @@ async def start_scan(request: Request) -> Response:
     scan_id = run_scan(view, state.store, "manual", lower_priority=True)
     log_event(_LOG, logging.INFO, "scan.finished", scan_id=scan_id, username=actor.username)
     return _json(request, {"scan_id": scan_id})
+
+
+async def metric_series(request: Request) -> Response:
+    _require(request, _READ)
+    return _json(request, {"series": list_series(_state(request).store.conn)})
 
 
 async def metrics(request: Request) -> Response:

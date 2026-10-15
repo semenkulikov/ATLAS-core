@@ -72,6 +72,11 @@ const en = {
   filter: "Filter",
   pattern: "Pattern",
   scanCode: "Scan this with your authenticator app, then enter the six-digit code.",
+  rejected: "The username, password, or second factor was not accepted.",
+  forbidden: "This action is outside the current role.",
+  csrf: "The page token did not match. Reload and try again.",
+  follow: "Follow",
+  pause: "Pause",
 };
 
 const ru: typeof en = {
@@ -129,6 +134,11 @@ const ru: typeof en = {
   filter: "Фильтр",
   pattern: "Шаблон",
   scanCode: "Отсканируйте это приложением-аутентификатором и введите шесть цифр.",
+  rejected: "Имя, пароль или второй фактор не приняты.",
+  forbidden: "Этого действия нет у текущей роли.",
+  csrf: "Токен страницы не совпал. Обновите страницу и повторите.",
+  follow: "Следить",
+  pause: "Пауза",
 };
 
 const dictionaries = { en, ru };

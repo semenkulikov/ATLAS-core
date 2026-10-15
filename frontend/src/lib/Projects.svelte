@@ -19,7 +19,7 @@
         if (!selected && payload.items[0]) selected = payload.items[0].key;
       })
       .catch((error: unknown) => {
-        note = shownError(error, copy(lang, "noScan"));
+        note = shownError(error, lang);
       });
   });
 
@@ -47,7 +47,7 @@
       hits = payload.hits;
     } catch (error) {
       hits = [];
-      note = shownError(error, copy(lang, "noScan"));
+      note = shownError(error, lang);
     }
   }
 </script>
