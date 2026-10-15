@@ -125,6 +125,8 @@ class HelperServer:
             return {"ok": True, "result": message}
         if plan.op == "read.file":
             return self._read_file(plan.confirm)
+        if plan.op == "read.dir":
+            return self._read_dir(plan.confirm)
         if plan.op == "read.engine":
             route = params.get("path")
             if not isinstance(route, str):
@@ -160,6 +162,24 @@ class HelperServer:
             "sha256": hashlib.sha256(data).hexdigest(),
             "status": "ok",
         }
+
+    def _read_dir(self, target: str) -> dict[str, object]:
+        from atlas.helper.protocol import readable_dir
+
+        if not readable_dir(target):
+            return {"ok": False, "error": "That directory is not on the read whitelist."}
+        path = Path(target)
+        try:
+            names = sorted(
+                entry.name
+                for entry in path.iterdir()
+                if entry.is_file() and not entry.is_symlink()
+            )
+        except FileNotFoundError:
+            return {"ok": False, "error": "directory not found", "status": "absent"}
+        except OSError as exc:
+            return {"ok": False, "error": exc.strerror or "unreadable", "status": "unavailable"}
+        return {"ok": True, "names": names, "status": "ok"}
 
     def _read_engine(self, route: str) -> dict[str, object]:
         from atlas.collectors.platforms import engine_get

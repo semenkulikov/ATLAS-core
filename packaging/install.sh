@@ -110,7 +110,8 @@ printf '%s\n' "The application lives in /opt/atlas. Repeat this script to repair
 
 if [ "$prefix" = / ] && [ "$start" -eq 1 ]; then
   systemctl daemon-reload
-  systemctl enable --now atlas.service atlas-helper.service
+  systemctl enable atlas.service atlas-helper.service
+  systemctl restart atlas-helper.service atlas.service
   i=0
   while [ "$i" -lt 50 ]; do
     if [ -S /run/atlas/web.sock ]; then

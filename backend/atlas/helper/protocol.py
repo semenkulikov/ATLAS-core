@@ -48,6 +48,7 @@ _SUDOERS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _HOME_KEYS = re.compile(r"^/(?:root|home/[a-z_][a-z0-9_-]{0,31})/\.ssh/authorized_keys$")
 _SSHD_DROPIN = re.compile(r"^/etc/ssh/sshd_config\.d/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _CERT_PATH = re.compile(r"^/etc/letsencrypt/live/[A-Za-z0-9][A-Za-z0-9._-]{0,253}/fullchain\.pem$")
+_READABLE_DIRS = frozenset({"/etc/sudoers.d", "/etc/ssh/sshd_config.d"})
 
 _SERVICE = {
     "service.start": "start",
@@ -145,6 +146,11 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
         if argv not in _FIREWALL_ARGV:
             raise ProtocolError("That command is not on the read whitelist.")
         return Plan(op, argv, "low", " ".join(argv))
+    if op == "read.dir":
+        target = params.get("path")
+        if not isinstance(target, str) or not readable_dir(target):
+            raise ProtocolError("That directory is not on the read whitelist.")
+        return Plan(op, (), "low", target)
     raise ProtocolError("That operation is not in the whitelist.")
 
 
@@ -160,6 +166,11 @@ def readable_path(path: str) -> bool:
     if _SSHD_DROPIN.fullmatch(path) is not None:
         return True
     return _CERT_PATH.fullmatch(path) is not None
+
+
+def readable_dir(path: str) -> bool:
+    """Return whether the helper may list names under ``path``."""
+    return path in _READABLE_DIRS
 
 
 def readable_engine_path(path: str) -> bool:

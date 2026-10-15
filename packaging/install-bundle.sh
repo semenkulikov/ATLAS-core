@@ -61,7 +61,8 @@ printf '%s\n' "Installed from a signed archive. The interpreter is /opt/atlas/py
   > /etc/atlas/README
 
 systemctl daemon-reload
-systemctl enable --now atlas.service atlas-helper.service
+systemctl enable atlas.service atlas-helper.service
+systemctl restart atlas-helper.service atlas.service
 
 i=0
 while [ "$i" -lt 50 ]; do

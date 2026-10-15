@@ -740,53 +740,54 @@ def _read_sudoers(view: HostView, bag: Bag) -> tuple[str, str] | None:
     source = "/etc/sudoers"
     if main.ok and main.text is not None:
         chunks.append(main.text)
-    directory = view.mapped("/etc/sudoers.d")
-    try:
-        is_dir = directory.is_dir()
-    except OSError as exc:
-        bag.note("/etc/sudoers.d", "unavailable", exc.strerror or "permission denied")
-        is_dir = False
-    if is_dir:
-        try:
-            entries = sorted(directory.iterdir())
-        except OSError as exc:
-            bag.note("/etc/sudoers.d", "unavailable", exc.strerror or "permission denied")
-            entries = []
-        for path in entries:
-            try:
-                if not path.is_file() or path.is_symlink():
-                    continue
-            except OSError:
-                continue
-            logical = "/etc/sudoers.d/" + path.name
-            extra = bag.read(view, logical)
-            if extra.ok and extra.text:
-                chunks.append(extra.text)
-                source = logical
+    for name in _list_config_dir(view, bag, "/etc/sudoers.d"):
+        logical = f"/etc/sudoers.d/{name}"
+        extra = bag.read(view, logical)
+        if extra.ok and extra.text:
+            chunks.append(extra.text)
+            source = logical
     if not chunks:
         return None
     return "\n".join(chunks), source
 
 
+def _list_config_dir(view: HostView, bag: Bag, directory: str) -> list[str]:
+    """Return file names under an inventory directory, via the helper when needed."""
+    mapped = view.mapped(directory)
+    try:
+        if not mapped.is_dir():
+            return []
+        return sorted(
+            path.name for path in mapped.iterdir() if path.is_file() and not path.is_symlink()
+        )
+    except OSError as exc:
+        if not view.helper_socket:
+            bag.note(directory, "unavailable", exc.strerror or "permission denied")
+            return []
+        from atlas.helper.client import read_dir
+
+        try:
+            answer = read_dir(view.helper_socket, directory)
+        except (OSError, ValueError):
+            bag.note(directory, "unavailable", exc.strerror or "permission denied")
+            return []
+        if answer.get("ok") and isinstance(answer.get("names"), list):
+            bag.note(directory, "ok", "via helper")
+            return [str(name) for name in answer["names"] if isinstance(name, str)]
+        bag.note(
+            directory,
+            str(answer.get("status") or "unavailable"),
+            str(answer.get("error") or exc.strerror or "permission denied"),
+        )
+        return []
+
+
 def _sshd(view: HostView, bag: Bag) -> None:
     files = ["/etc/ssh/sshd_config"]
-    dropin = view.mapped("/etc/ssh/sshd_config.d")
-    try:
-        is_dir = dropin.is_dir()
-    except OSError as exc:
-        bag.note("/etc/ssh/sshd_config.d", "unavailable", exc.strerror or "permission denied")
-        is_dir = False
-    if is_dir:
-        try:
-            entries = sorted(dropin.iterdir())
-        except OSError as exc:
-            bag.note("/etc/ssh/sshd_config.d", "unavailable", exc.strerror or "permission denied")
-            entries = []
-        files.extend(
-            "/etc/ssh/sshd_config.d/" + path.name
-            for path in entries
-            if path.is_file() and not path.is_symlink()
-        )
+    files.extend(
+        f"/etc/ssh/sshd_config.d/{name}"
+        for name in _list_config_dir(view, bag, "/etc/ssh/sshd_config.d")
+    )
     merged: dict[str, tuple[str, int, str]] = {}
     any_ok = False
     for path in files:

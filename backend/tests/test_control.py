@@ -52,6 +52,10 @@ def test_whitelist_refuses_a_protected_unit_and_a_shell_character() -> None:
     assert reboot.argv == ("systemctl", "reboot")
     remove = build_plan("container.remove", {"name": "atlas-probe", "force": True})
     assert remove.argv == ("docker", "rm", "--force", "atlas-probe")
+    listed = build_plan("read.dir", {"path": "/etc/sudoers.d"})
+    assert listed.confirm == "/etc/sudoers.d"
+    with pytest.raises(ProtocolError):
+        build_plan("read.dir", {"path": "/etc/passwd"})
 
 
 def test_ssh_edit_keeps_a_backup(tmp_path: Path) -> None:

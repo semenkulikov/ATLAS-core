@@ -39,6 +39,11 @@ def read_command(path: str, argv: list[str]) -> dict[str, object]:
     return call_helper(path, {"op": "read.command", "params": {"argv": argv}})
 
 
+def read_dir(path: str, target: str) -> dict[str, object]:
+    """Ask the helper to list allowlisted directory names."""
+    return call_helper(path, {"op": "read.dir", "params": {"path": target}})
+
+
 def engine_bundle(path: str) -> dict[str, Any] | None:
     """Return the four engine documents, or ``None`` when the helper refuses."""
     payload: dict[str, Any] = {}
