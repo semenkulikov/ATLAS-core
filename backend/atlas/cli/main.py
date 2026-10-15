@@ -184,7 +184,8 @@ def _tighten_socket(socket_path: str) -> None:
     def once() -> None:
         for _ in range(50):
             if os.path.exists(socket_path):
-                os.chmod(socket_path, 0o660)  # nosec B103
+                # Group-writable Unix socket for the atlas service user (not a world file).
+                os.chmod(socket_path, 0o660)  # nosec B103  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                 return
             time.sleep(0.1)
 

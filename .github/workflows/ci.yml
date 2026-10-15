@@ -27,9 +27,10 @@ jobs:
       - name: Dependency audit
         run: uv run --project backend pip-audit backend
       - name: Semgrep
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: p/python
+        run: |
+          python3 -m pip install --user 'semgrep>=1.76'
+          export PATH="$HOME/.local/bin:$PATH"
+          semgrep scan --config p/python --error --metrics=off backend/atlas
 
   frontend:
     runs-on: ubuntu-latest

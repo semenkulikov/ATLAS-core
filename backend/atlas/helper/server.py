@@ -58,7 +58,8 @@ class HelperServer:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         server.bind(str(self.path))
-        os.chmod(self.path, 0o660)  # nosec B103
+        # Group-writable Unix socket for the atlas service user (not a world file).
+        os.chmod(self.path, 0o660)  # nosec B103  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         if self.socket_gid is not None:
             os.chown(self.path, 0, self.socket_gid)
         server.listen(4)
