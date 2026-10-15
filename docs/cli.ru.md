@@ -1,19 +1,14 @@
-# Справочник команд
+# Команды
 
-| Команда | Что делает |
+Полезно после установки (или из git-копии):
+
+| Команда | Назначение |
 | --- | --- |
-| `atlas scan --root <путь> --format md\|json\|html` | Один отчёт. Без `--db` база временная. |
-| `atlas manifest --lang en\|ru` | Все файлы и команды, которые объявил сборщик. |
-| `atlas serve --db <файл>` | Панель на `/run/atlas/web.sock`. `--tcp 127.0.0.1:ПОРТ` включает loopback. |
-| `atlas token new --db <файл>` | Одноразовый токен регистрации. |
-| `atlas control enable\|disable --db <файл>` | Действия на хосте выключены, пока не enable. |
-| `atlas status --db <файл>` | Версия, переключатель управления, последний снимок. |
-| `atlas doctor --db <файл>` | Права файла и может ли канал оповещений уйти с хоста. |
-| `atlas expose` | Как можно открыть панель. |
-| `atlas user reset-2fa --db <файл>` | Новый секрет TOTP владельца. Только локально. |
-| `atlas export --db <файл>` | Последний завершённый снимок в Markdown, JSON и HTML. |
-| `atlas uninstall --prefix <путь> [--purge]` | Удаляет файлы продукта. База остаётся без `--purge`. |
+| `atlas status` | Версия и последний скан |
+| `atlas scan` | Запустить инвентаризацию |
+| `atlas export` | Сохранить последний отчёт |
+| `atlas control enable` / `disable` | Разрешить или запретить действия с хостом из панели |
+| `atlas doctor` | Быстрая диагностика |
+| `atlas uninstall --purge` | Удалить продукт |
 
-Продакшен-установка: `curl …/get-atlas.sh | sudo sh` (см. [README.ru.md](../README.ru.md)). `packaging/install.sh --url` — тот же путь со скачиванием. Обычный `packaging/install.sh` ставит из git без загрузки релиза.
-
-`atlas-helper --socket <путь> --uid <uid веб-процесса>` — процесс root. `serve` его не запускает.
+Обычная работа — через веб-панель. Установка и удаление — однострочниками из [README](../README.ru.md).

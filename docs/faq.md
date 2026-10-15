@@ -1,13 +1,22 @@
 # FAQ
 
-**How do I install ATLAS?** One command as root: `curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh`. Remove with `packaging/remove-atlas.sh` the same way.
+**What is ATLAS?**  
+A single panel for one Linux server: inventory, live metrics, project dashboards, logs, alerts, and optional host control.
 
-**Does a scan open a port?** No. `atlas scan` writes a report and does not listen.
+**How do I install it?**
 
-**Where do secrets go?** They are not stored. Excerpts are masked, `/etc/shadow` and private keys are refused, and `.env` files keep key names only.
+```bash
+curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh
+```
 
-**Can I restart a service from the panel?** Only after `atlas control enable` on the host, and only through the helper whitelist. The panel asks you to type the unit name.
+**How do I remove it?**
 
-**Will alerts phone home?** No channel sends anything until you enable webhook or Telegram.
+```bash
+curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/remove-atlas.sh | sudo sh
+```
 
-**What if I am not root?** Missing sources stay unknown, with the reason. The report is still written.
+**Is data sent to the cloud?**  
+No. Everything stays on the server until you enable Telegram or webhook alerts.
+
+**Can I restart services from the UI?**  
+Yes, after you turn control on. Dangerous actions ask for confirmation.

@@ -1,19 +1,14 @@
-# Command reference
+# Commands
 
-| Command | What it does |
+Useful after install (or from a development checkout):
+
+| Command | Purpose |
 | --- | --- |
-| `atlas scan --root <path> --format md\|json\|html` | One report. Without `--db` the database is temporary. |
-| `atlas manifest --lang en\|ru` | Every file and command a collector declares. |
-| `atlas serve --db <file>` | Panel on `/run/atlas/web.sock`. Add `--tcp 127.0.0.1:PORT` for loopback. |
-| `atlas token new --db <file>` | One-time enrollment token. |
-| `atlas control enable\|disable --db <file>` | Host actions stay off until enable. |
-| `atlas status --db <file>` | Version, control switch, latest scan. |
-| `atlas doctor --db <file>` | File mode and whether an alert channel can leave the host. |
-| `atlas expose` | How the panel may be reached. |
-| `atlas user reset-2fa --db <file>` | New TOTP secret for the owner. Local only. |
-| `atlas export --db <file>` | Latest completed scan as Markdown, JSON, and HTML. |
-| `atlas uninstall --prefix <path> [--purge]` | Remove product files. The database stays unless `--purge`. |
+| `atlas status` | Version and latest scan |
+| `atlas scan` | Run inventory now |
+| `atlas export` | Save the latest report |
+| `atlas control enable` / `disable` | Allow or block host actions from the panel |
+| `atlas doctor` | Quick health checks |
+| `atlas uninstall --purge` | Remove the product |
 
-Production install: `curl …/get-atlas.sh | sudo sh` (see [README.md](../README.md)). `packaging/install.sh --url` does the same download path. A plain `packaging/install.sh` installs from a git checkout without downloading.
-
-`atlas-helper --socket <path> --uid <web uid>` is the root process. It is not started by `serve`.
+Day-to-day use is through the web panel. Install and remove with the one-liners in the [README](../README.md).

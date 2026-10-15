@@ -1,26 +1,11 @@
-# Publishing the panel
+# Accessing the panel
 
-Leave the listener on `/run/atlas/web.sock` and open it with `ssh -L`. That is the supported path.
-
-A public bind is refused unless `atlas serve` is given `--tls` and at least one `--allow` address. Put TLS on a reverse proxy or a private network you already trust. Do not publish the panel to the open internet to make a demo.
-
-## One-command install
+After install, reach ATLAS through an SSH tunnel:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/get-atlas.sh | sudo sh
+ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@YOUR_HOST
 ```
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packaging/remove-atlas.sh | sudo sh
-```
+Then open http://127.0.0.1:8765.
 
-The installer downloads the signed x86_64 archive from [GitHub Releases](https://github.com/semenkulikov/ATLAS-core/releases/latest), checks SHA-256 (and minisign when available), then runs the archive `install.sh`.
-
-## Manual archive
-
-```bash
-# after download + verify + extract
-sudo ./atlas-1.0.0-linux-x86_64/install.sh
-```
-
-Assets: `.tar.gz`, `.minisig`, `.sha256`, `minisign.pub`.
+Do not put the panel on the public internet without TLS and a trusted reverse proxy you already control.
