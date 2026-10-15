@@ -1,4 +1,5 @@
 <script lang="ts">
+  import QRCode from "qrcode";
   import { ApiError, api } from "./api";
   import { copy, type Lang } from "./i18n";
 
@@ -9,7 +10,7 @@
   let password = $state("");
   let code = $state("");
   let token = $state("");
-  let secret = $state("");
+  let qr = $state("");
   let error = $state("");
   let busy = $state(false);
 
@@ -34,7 +35,12 @@
           { method: "POST", body: JSON.stringify({ token, username, password }) },
         );
         token = started.enrollment_token;
-        secret = new URL(started.otpauth_uri).searchParams.get("secret") ?? started.otpauth_uri;
+        qr = await QRCode.toDataURL(started.otpauth_uri, {
+          margin: 1,
+          width: 220,
+          errorCorrectionLevel: "M",
+          color: { dark: "#08090a", light: "#ffffff" },
+        });
         mode = "confirm";
       } else {
         await api("/api/v1/auth/enroll", {
@@ -84,8 +90,9 @@
         <input class="mt-1 w-full rounded-md border border-graphite bg-void px-3 py-2 font-mono text-paper" inputmode="numeric" bind:value={code} />
       </label>
     {/if}
-    {#if secret}
-      <p class="mb-3 break-all rounded-md border border-dashed border-ash p-3 font-mono text-xs text-fog">{secret}</p>
+    {#if qr}
+      <img class="mx-auto mb-3 rounded-md bg-white p-2" src={qr} width="220" height="220" alt={text("scanCode")} />
+      <p class="mb-3 text-center text-sm text-fog">{text("scanCode")}</p>
     {/if}
     {#if error || message}
       <p class="mb-3 text-sm text-crit" role="alert">{error || message}</p>
@@ -96,7 +103,10 @@
     <button
       class="mt-3 w-full text-sm text-fog"
       type="button"
-      onclick={() => (mode = mode === "login" ? "enroll" : "login")}
+      onclick={() => {
+        mode = mode === "login" ? "enroll" : "login";
+        qr = "";
+      }}
     >
       {mode === "login" ? text("enroll") : text("signIn")}
     </button>

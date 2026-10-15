@@ -71,6 +71,7 @@ const en = {
   channelsOff: "Alert channels are off. Nothing is sent off this host.",
   filter: "Filter",
   pattern: "Pattern",
+  scanCode: "Scan this with your authenticator app, then enter the six-digit code.",
 };
 
 const ru: typeof en = {
@@ -127,6 +128,7 @@ const ru: typeof en = {
   channelsOff: "Каналы оповещений выключены. Наружу ничего не уходит.",
   filter: "Фильтр",
   pattern: "Шаблон",
+  scanCode: "Отсканируйте это приложением-аутентификатором и введите шесть цифр.",
 };
 
 const dictionaries = { en, ru };

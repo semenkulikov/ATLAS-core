@@ -57,6 +57,7 @@ describe("panel copy", () => {
       channelsOff: "",
       filter: "",
       pattern: "",
+      scanCode: "",
     }) as CopyKey[];
     for (const key of keys) {
       expect(copy("en", key).length).toBeGreaterThan(0);

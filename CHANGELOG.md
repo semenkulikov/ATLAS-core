@@ -9,3 +9,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). Versions fol
 - Alert rules are recorded locally. Telegram, SMTP, and webhook channels stay off until the owner enables one.
 - `packaging/install.sh` lays down directories and systemd units. It does not download a release.
 - The shop fixture has an expected fact list. `atlas export` writes the latest scan. Metric storage drops the oldest points past 200 MiB.
+- First-time setup shows a QR code for the authenticator app.
