@@ -271,11 +271,17 @@ def test_metric_budget_drops_the_oldest_points(tmp_path: Path) -> None:
 
 def test_oneshot_does_not_install_units(tmp_path: Path) -> None:
     script = Path(__file__).resolve().parents[2] / "packaging" / "install.sh"
+    bare = os.pathsep.join(
+        entry
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if entry and not (Path(entry) / "atlas").exists()
+    )
     completed = subprocess.run(
         ["sh", str(script), "--prefix", str(tmp_path / "root"), "--oneshot"],
         check=False,
         capture_output=True,
         text=True,
+        env={**os.environ, "PATH": bare},
     )
     assert completed.returncode == 0, completed.stderr
     assert "oneshot" in completed.stdout
