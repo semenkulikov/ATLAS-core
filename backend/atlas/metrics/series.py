@@ -121,7 +121,7 @@ def list_series(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
         "SELECT DISTINCT series FROM metric_points WHERE series LIKE 'host.%' ORDER BY series"
     ).fetchall()
-    return [str(row["series"]) for row in rows][:12]
+    return [str(row["series"]) for row in rows][:24]
 
 
 def query_series(
