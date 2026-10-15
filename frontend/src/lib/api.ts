@@ -68,3 +68,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   return payload as T;
 }
+
+export function shownError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.code === "scan.missing") return fallback;
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}

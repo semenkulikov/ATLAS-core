@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import uPlot from "uplot";
   import "uplot/dist/uPlot.min.css";
-  import { api } from "./api";
+  import { api, shownError } from "./api";
   import { copy, type Lang } from "./i18n";
 
   let { lang }: { lang: Lang } = $props();
@@ -59,7 +59,7 @@
           );
         })
         .catch((error: unknown) => {
-          message = error instanceof Error ? error.message : copy(lang, "error");
+          message = shownError(error, copy(lang, "error"));
         });
     }
   }

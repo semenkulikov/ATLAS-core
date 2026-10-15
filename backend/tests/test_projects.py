@@ -121,6 +121,21 @@ def test_discover_uses_a_systemd_anchor(tmp_path: Path) -> None:
     assert any(item.value == "FastAPI" for item in result.facts)
 
 
+def test_an_unreadable_directory_does_not_abort_discovery(tmp_path: Path, monkeypatch) -> None:
+    hidden = tmp_path / "hidden"
+    hidden.mkdir()
+    view = open_view(tmp_path, now=datetime(2026, 10, 15, tzinfo=UTC))
+    original = Path.exists
+
+    def denied(self: Path, *, follow_symlinks: bool = True) -> bool:
+        if self.name == ".git" and "hidden" in self.parts:
+            raise PermissionError(13, "Permission denied", str(self))
+        return original(self, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "exists", denied)
+    assert find_root(view, "/hidden/app") is None
+
+
 def test_a_git_checkout_records_the_commit(tmp_path: Path) -> None:
     root = tmp_path / "proj"
     root.mkdir()

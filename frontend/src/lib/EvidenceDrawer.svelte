@@ -1,7 +1,7 @@
 <script lang="ts">
   import { copy, type Lang } from "./i18n";
   import type { Evidence } from "./api";
-  import { api } from "./api";
+  import { api, shownError } from "./api";
 
   let { factId, lang, onclose }: { factId: number; lang: Lang; onclose: () => void } = $props();
   let rows = $state<Evidence[]>([]);
@@ -16,7 +16,7 @@
         rows = payload.evidence;
       })
       .catch((error: unknown) => {
-        message = error instanceof Error ? error.message : copy(lang, "error");
+        message = shownError(error, copy(lang, "error"));
       });
   });
 </script>

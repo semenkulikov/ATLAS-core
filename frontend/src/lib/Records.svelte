@@ -1,7 +1,7 @@
 <script lang="ts">
   import ActionDialog from "./ActionDialog.svelte";
   import Facts from "./Facts.svelte";
-  import { api, type Entity, type Fact } from "./api";
+  import { api, shownError, type Entity, type Fact } from "./api";
   import { copy, type Lang } from "./i18n";
 
   let {
@@ -35,7 +35,7 @@
     items = [];
     selected = null;
     void load().catch((error: unknown) => {
-      message = error instanceof Error ? error.message : copy(lang, "error");
+      message = shownError(error, copy(lang, "noScan"));
     });
   });
 

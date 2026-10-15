@@ -1,6 +1,6 @@
 <script lang="ts">
   import Facts from "./Facts.svelte";
-  import { api, type Entity, type Fact } from "./api";
+  import { api, shownError, type Entity, type Fact } from "./api";
   import { copy, type Lang } from "./i18n";
 
   let { lang, onopen }: { lang: Lang; onopen: (id: number) => void } = $props();
@@ -13,10 +13,14 @@
   let note = $state("");
 
   $effect(() => {
-    void api<{ items: Entity[] }>("/api/v1/projects").then((payload) => {
-      items = payload.items;
-      if (!selected && payload.items[0]) selected = payload.items[0].key;
-    });
+    void api<{ items: Entity[] }>("/api/v1/projects")
+      .then((payload) => {
+        items = payload.items;
+        if (!selected && payload.items[0]) selected = payload.items[0].key;
+      })
+      .catch((error: unknown) => {
+        note = shownError(error, copy(lang, "noScan"));
+      });
   });
 
   $effect(() => {
@@ -43,7 +47,7 @@
       hits = payload.hits;
     } catch (error) {
       hits = [];
-      note = error instanceof Error ? error.message : copy(lang, "error");
+      note = shownError(error, copy(lang, "noScan"));
     }
   }
 </script>

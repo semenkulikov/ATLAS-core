@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api } from "./api";
+  import { api, shownError } from "./api";
   import { copy, type Lang } from "./i18n";
 
   type Change = {
@@ -20,7 +20,7 @@
         rows = payload.changes;
       })
       .catch((error: unknown) => {
-        message = error instanceof Error ? error.message : copy(lang, "error");
+        message = shownError(error, copy(lang, "noScan"));
       });
   });
 </script>

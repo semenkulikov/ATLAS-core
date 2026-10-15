@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Entity } from "./api";
+  import { api, shownError, type Entity } from "./api";
   import { copy, type Lang } from "./i18n";
 
   let { lang }: { lang: Lang } = $props();
@@ -19,7 +19,7 @@
         projects = listed.items;
       })
       .catch((error: unknown) => {
-        message = error instanceof Error ? error.message : copy(lang, "error");
+        message = shownError(error, copy(lang, "noScan"));
       });
   });
 

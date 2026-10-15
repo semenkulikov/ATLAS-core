@@ -147,7 +147,11 @@ def find_root(view: HostView, start: str) -> str | None:
     """Walk from an anchor directory up to the nearest project marker."""
     current = start
     mapped = view.mapped(current)
-    if mapped.is_file():
+    try:
+        is_file = mapped.is_file()
+    except OSError:
+        is_file = False
+    if is_file:
         current = str(Path(current).parent)
     for _ in range(_MAX_DEPTH + 2):
         if _has_marker(view, current):
@@ -224,11 +228,18 @@ def _path_in_command(command: str) -> str | None:
 
 def _has_marker(view: HostView, logical: str) -> bool:
     base = view.mapped(logical)
-    if not base.is_dir() or base.is_symlink():
+    try:
+        if not base.is_dir() or base.is_symlink():
+            return False
+    except OSError:
         return False
     for marker in MARKERS:
         candidate = base / marker
-        if candidate.exists():
+        try:
+            present = candidate.exists()
+        except OSError:
+            continue
+        if present:
             return True
     return False
 
@@ -312,7 +323,11 @@ def _compose_services(view: HostView, root: str, subject: str) -> list[Fact]:
 
 
 def _git_facts(view: HostView, root: str, subject: str) -> list[Fact]:
-    if not (view.mapped(root) / ".git").exists():
+    try:
+        has_git = (view.mapped(root) / ".git").exists()
+    except OSError:
+        has_git = False
+    if not has_git:
         return [unknown(subject, "git.branch", "no git directory", collected_at=view.now)]
     facts: list[Fact] = []
     head = view.read(str(Path(root) / ".git" / "HEAD"))
@@ -427,7 +442,11 @@ def _strip_remote(url: str) -> str:
 
 def _index_docs(view: HostView, root: str, project_id: str) -> list[dict[str, object]]:
     base = view.mapped(root)
-    if not base.is_dir():
+    try:
+        readable = base.is_dir()
+    except OSError:
+        readable = False
+    if not readable:
         return []
     found: list[dict[str, object]] = []
     for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
@@ -445,14 +464,17 @@ def _index_docs(view: HostView, root: str, project_id: str) -> list[dict[str, ob
             if not _is_doc(filename, depth):
                 continue
             path = Path(dirpath) / filename
-            if path.is_symlink():
+            try:
+                if path.is_symlink():
+                    continue
+                stat = path.stat()
+            except OSError:
                 continue
             logical = logical_path(view, path)
             outcome = view.read(logical, max_bytes=_MAX_DOC_BYTES)
             if not outcome.ok or outcome.text is None:
                 continue
             body = _plain_text(mask_secrets(outcome.text))
-            stat = path.stat()
             found.append(
                 {
                     "project_id": project_id,
