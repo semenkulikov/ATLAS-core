@@ -29,7 +29,10 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --url)
-      # Download and install the signed release (same path as get-atlas.sh).
+      # Optional leftover URL argument is ignored; get-atlas.sh pins the release.
+      if [ "${2-}" != "" ] && ! printf '%s' "$2" | grep -q '^-'; then
+        shift
+      fi
       exec sh "$root/packaging/get-atlas.sh"
       ;;
     *)

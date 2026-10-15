@@ -146,13 +146,15 @@ def test_installer_dry_run_and_prefix(tmp_path: Path) -> None:
     assert dry.returncode == 0
     assert "/opt/atlas" in dry.stdout
     assert not (tmp_path / "dry").exists()
-    refused = subprocess.run(
-        ["sh", str(script), "--url", "https://example.invalid/atlas.tar"],
+    # --url hands off to get-atlas.sh, which must run as root.
+    remote = subprocess.run(
+        ["sh", str(script), "--url"],
         check=False,
         capture_output=True,
         text=True,
     )
-    assert refused.returncode == 2
+    assert remote.returncode == 1
+    assert "root" in remote.stderr.lower()
     installed = subprocess.run(
         ["sh", str(script), "--prefix", str(tmp_path / "root"), "--no-start"],
         check=False,
