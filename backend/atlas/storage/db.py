@@ -349,9 +349,12 @@ class Store:
         return fact_id
 
     def _insert_entities(self, scan_id: int, results: list[CollectorResult]) -> None:
+        seen: dict[tuple[str, str], Entity] = {}
         for result in results:
             for item in result.entities:
-                self._insert_entity(scan_id, item)
+                seen[(item.kind, item.key)] = item
+        for item in seen.values():
+            self._insert_entity(scan_id, item)
 
     def _insert_entity(self, scan_id: int, item: Entity) -> None:
         self._conn.execute(

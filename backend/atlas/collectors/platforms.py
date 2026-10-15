@@ -255,10 +255,11 @@ class ContainerCollector:
                 )
         for item in _as_list(payload.get("networks")):
             if isinstance(item, dict) and item.get("Name"):
+                name = str(item["Name"])
                 bag.entity(
                     "network",
-                    str(item["Name"]),
-                    {"name": item["Name"], "driver": item.get("Driver")},
+                    f"docker:{name}",
+                    {"name": name, "driver": item.get("Driver"), "engine": "docker"},
                 )
         volumes = payload.get("volumes")
         volume_rows = volumes.get("Volumes") if isinstance(volumes, dict) else volumes

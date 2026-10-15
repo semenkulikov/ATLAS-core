@@ -160,6 +160,10 @@ class Bag:
         self.facts.append(unknown(subject, predicate, reason, collected_at=self.now))
 
     def entity(self, kind: str, key: str, payload: dict[str, object]) -> None:
+        for index, existing in enumerate(self.entities):
+            if existing.kind == kind and existing.key == key:
+                self.entities[index] = Entity(kind, key, payload)
+                return
         self.entities.append(Entity(kind, key, payload))
 
     def freeze(self) -> CollectorResult:
