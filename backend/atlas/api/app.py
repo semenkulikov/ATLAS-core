@@ -89,7 +89,7 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     """Build the API. OpenAPI is not mounted publicly; owners fetch it explicitly."""
-    app = FastAPI(title="ATLAS", version="1.0.1", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="ATLAS", version="1.0.2", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.atlas = AppState(
         store,
         settings,
@@ -114,6 +114,7 @@ def create_app(
     app.add_api_route("/api/v1/schedules", schedules, methods=["GET"])
     app.add_api_route("/api/v1/ports", ports, methods=["GET"])
     app.add_api_route("/api/v1/users", users, methods=["GET"])
+    app.add_api_route("/api/v1/users/{username}", user_one, methods=["GET"])
     app.add_api_route("/api/v1/ssh-keys", ssh_keys, methods=["GET"])
     app.add_api_route("/api/v1/projects", projects, methods=["GET"])
     app.add_api_route("/api/v1/projects/{project_id}", project_one, methods=["GET"])
@@ -416,6 +417,11 @@ async def users(request: Request) -> Response:
     return _entities(request, "user")
 
 
+async def user_one(request: Request, username: str) -> Response:
+    _require(request, _READ)
+    return _one_entity(request, "user", username)
+
+
 async def ssh_keys(request: Request) -> Response:
     _require(request, _READ)
     return _entities(request, "ssh_key")
@@ -697,7 +703,9 @@ def _one_entity(request: Request, kind: str, key: str) -> Response:
     rows = [row for row in state.store.entities(scan_id, kind) if row["key"] == key]
     if not rows:
         raise Problem(404, "That record is not in the latest scan.", "record.missing")
-    facts = state.store.facts(scan_id, f"{kind}:{key}")
+    # Fact subjects use unit: for systemd services; other kinds match entity kind.
+    subject_kind = "unit" if kind == "service" else kind
+    facts = state.store.facts(scan_id, f"{subject_kind}:{key}")
     return _json(request, {"scan_id": scan_id, "entity": rows[0], "facts": facts})
 
 

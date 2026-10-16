@@ -2,6 +2,20 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.0.2] - 2026-10-16
+
+### Added
+- Working vs system list split (users, services, ports, schedules) with a collapsed system section.
+- `GET /api/v1/users/{name}` with facts and SSH keys in the user detail panel.
+- Error modals, clearer EN/RU copy, human chart titles, live badges on Monitoring and Logs.
+
+### Changed
+- Action confirm dialogs use a red frame (no Acid Lime on dangerous confirms).
+- Service detail facts resolve under the `unit:` subject prefix.
+
+### Fixed
+- Panel no longer shows raw API keys/ops as primary UI text.
+
 ## [1.0.1] - 2026-10-15
 
 ### Added

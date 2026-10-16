@@ -117,7 +117,9 @@
       </form>
     {/if}
     {#if role === "owner" && enabled && hostname}
-      <button type="button" class="mt-8 text-sm text-accent" onclick={() => (reboot = true)}>host.reboot</button>
+      <button type="button" class="mt-8 rounded-md border border-crit px-3 py-1.5 text-sm text-paper" onclick={() => (reboot = true)}>
+        {copy(lang, "opReboot")}
+      </button>
     {/if}
   {/if}
 </section>

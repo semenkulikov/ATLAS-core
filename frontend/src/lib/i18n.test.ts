@@ -1,84 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { copy, routeFromHash, routes, type CopyKey } from "./i18n";
+import { copy, copyKeys, routeFromHash, routes } from "./i18n";
 
 describe("panel copy", () => {
-  it("uses the same keys in English and Russian", () => {
-    const keys = [
-      "product",
-      "overview",
-      "projects",
-      "services",
-      "schedules",
-      "containers",
-      "network",
-      "users",
-      "monitoring",
-      "logs",
-      "changes",
-      "audit",
-      "settings",
-      "search",
-      "palette",
-      "signIn",
-      "signOut",
-      "username",
-      "password",
-      "code",
-      "enroll",
-      "enrollToken",
-      "continue",
-      "confirm",
-      "language",
-      "empty",
-      "loading",
-      "error",
-      "evidence",
-      "close",
-      "unknown",
-      "readOnly",
-      "noScan",
-      "noScanHint",
-      "runScan",
-      "scanning",
-      "scanDone",
-      "loadMore",
-      "source",
-      "show",
-      "exposed",
-      "local",
-      "role",
-      "controlOn",
-      "risks",
-      "intact",
-      "broken",
-      "when",
-      "actor",
-      "action",
-      "result",
-      "restart",
-      "typeToConfirm",
-      "saved",
-      "channelsOff",
-      "filter",
-      "pattern",
-      "scanCode",
-      "rejected",
-      "forbidden",
-      "csrf",
-      "follow",
-      "pause",
-      "alerts",
-      "channelKind",
-      "channelTarget",
-      "channelEnable",
-      "channelSaved",
-      "save",
-      "on",
-      "off",
-    ] as CopyKey[];
-    for (const key of keys) {
-      expect(copy("en", key).length).toBeGreaterThan(0);
-      expect(copy("ru", key).length).toBeGreaterThan(0);
+  it("keeps English and Russian dictionaries in lockstep", () => {
+    for (const key of copyKeys) {
+      expect(copy("en", key).length, key).toBeGreaterThan(0);
+      expect(copy("ru", key).length, key).toBeGreaterThan(0);
     }
   });
 

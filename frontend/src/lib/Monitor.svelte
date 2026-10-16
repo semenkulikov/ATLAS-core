@@ -2,11 +2,13 @@
   import { onDestroy, onMount } from "svelte";
   import "uplot/dist/uPlot.min.css";
   import Chart from "./Chart.svelte";
-  import { api, shownError } from "./api";
-  import { copy, type Lang } from "./i18n";
+  import { api, errorDetail, shownError } from "./api";
+  import { copy, groupLabel, metricMeta, type Lang } from "./i18n";
+  import Accordion from "./ui/Accordion.svelte";
+  import ErrorModal from "./ui/ErrorModal.svelte";
+  import LiveBadge from "./ui/LiveBadge.svelte";
 
   let { lang }: { lang: Lang } = $props();
-  let message = $state("");
   let range = $state(3600);
   let names = $state<string[]>([]);
   let live = $state<{
@@ -15,6 +17,11 @@
     cpu_idle: number | null;
     units: { name: string; memory_bytes: number | null }[];
   } | null>(null);
+  let liveKey = $state(0);
+  let connected = $state(false);
+  let moreOpen = $state(false);
+  let errorMessage = $state("");
+  let errorExtra = $state("");
   let socket: WebSocket | null = null;
   const presets = [
     [300, "5m"],
@@ -24,19 +31,40 @@
     [2592000, "30d"],
   ] as const;
 
+  const hostSeries = $derived(
+    names.filter((name) => metricMeta(lang, name).group === "host"),
+  );
+  const extraSeries = $derived(
+    names.filter((name) => metricMeta(lang, name).group !== "host"),
+  );
+  const extrasByGroup = $derived.by(() => {
+    const groups = new Map<string, string[]>();
+    for (const name of extraSeries) {
+      const group = metricMeta(lang, name).group;
+      const list = groups.get(group) ?? [];
+      list.push(name);
+      groups.set(group, list);
+    }
+    return [...groups.entries()];
+  });
+
   onMount(() => {
     void api<{ series: string[] }>("/api/v1/metrics/series")
       .then((payload) => {
         names = payload.series;
-        if (names.length === 0) message = copy(lang, "empty");
       })
       .catch((error: unknown) => {
-        message = shownError(error, lang);
+        errorMessage = shownError(error, lang);
+        errorExtra = errorDetail(error);
       });
     const protocol = location.protocol === "https:" ? "wss" : "ws";
     socket = new WebSocket(`${protocol}://${location.host}/api/v1/stream`);
     socket.addEventListener("open", () => {
+      connected = true;
       socket?.send(JSON.stringify({ subscribe: "metrics.live" }));
+    });
+    socket.addEventListener("close", () => {
+      connected = false;
     });
     socket.addEventListener("message", (event) => {
       try {
@@ -54,6 +82,7 @@
           cpu_idle: body.cpu_idle ?? null,
           units: body.units ?? [],
         };
+        liveKey += 1;
       } catch {
         return;
       }
@@ -67,33 +96,44 @@
 </script>
 
 <section>
-  <h1 class="mb-4 text-2xl text-paper">{copy(lang, "monitoring")}</h1>
+  <div class="mb-4 flex flex-wrap items-center gap-3">
+    <h1 class="text-2xl text-paper">{copy(lang, "monitoring")}</h1>
+    <LiveBadge {lang} on={connected} />
+  </div>
+
   {#if live}
-    <div class="mb-4 grid gap-2 rounded-xl border border-graphite bg-carbon p-3 text-sm text-mist md:grid-cols-3">
+    <div
+      class="atlas-tick mb-4 grid gap-2 rounded-xl border border-graphite bg-carbon p-3 text-sm text-mist md:grid-cols-3"
+      data-tick={liveKey}
+    >
       <p>
-        load
-        <span class="font-mono text-paper">
+        {copy(lang, "loadAvg")}
+        <span class="mt-1 block font-mono text-paper">
           {live.loadavg ? live.loadavg.map((value) => value.toFixed(2)).join(" ") : "—"}
         </span>
       </p>
       <p>
-        mem avail
-        <span class="font-mono text-paper">
+        {copy(lang, "memAvailable")}
+        <span class="mt-1 block font-mono text-paper">
           {live.memory_available === null ? "—" : `${Math.round(live.memory_available / 1048576)} MiB`}
         </span>
       </p>
       <p>
-        cpu idle
-        <span class="font-mono text-paper">{live.cpu_idle === null ? "—" : live.cpu_idle.toFixed(0)}</span>
+        {copy(lang, "cpuIdle")}
+        <span class="mt-1 block font-mono text-paper">
+          {live.cpu_idle === null ? "—" : `${live.cpu_idle.toFixed(0)}%`}
+        </span>
       </p>
       {#each live.units as unit (unit.name)}
-        <p class="font-mono text-xs text-fog">
-          {unit.name}
+        <p class="text-xs text-fog">
+          <span class="text-ash">{copy(lang, "unitMemory")}</span>
+          <span class="mt-0.5 block font-mono">{unit.name}</span>
           {unit.memory_bytes === null ? "" : `${Math.round(unit.memory_bytes / 1048576)} MiB`}
         </p>
       {/each}
     </div>
   {/if}
+
   <div class="mb-3 flex gap-2">
     {#each presets as [seconds, label] (seconds)}
       <button
@@ -105,10 +145,35 @@
       </button>
     {/each}
   </div>
-  {#if message}
-    <p class="text-sm text-fog" role="status">{message}</p>
+
+  {#if names.length === 0 && !errorMessage}
+    <p class="text-sm text-fog">{copy(lang, "empty")}</p>
   {/if}
-  {#each names as name (name)}
+
+  {#each hostSeries as name (name)}
     <Chart {lang} {name} seconds={range} />
   {/each}
+
+  {#if extrasByGroup.length > 0}
+    <Accordion title={copy(lang, "chartsMore")} count={extraSeries.length} bind:open={moreOpen}>
+      {#each extrasByGroup as [group, series] (group)}
+        <h2 class="mb-2 mt-3 px-2 text-xs uppercase tracking-wide text-ash">{groupLabel(lang, group)}</h2>
+        {#each series as name (name)}
+          <Chart {lang} {name} seconds={range} />
+        {/each}
+      {/each}
+    </Accordion>
+  {/if}
 </section>
+
+{#if errorMessage}
+  <ErrorModal
+    {lang}
+    message={errorMessage}
+    detail={errorExtra}
+    onclose={() => {
+      errorMessage = "";
+      errorExtra = "";
+    }}
+  />
+{/if}

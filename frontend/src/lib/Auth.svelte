@@ -1,6 +1,6 @@
 <script lang="ts">
   import QRCode from "qrcode";
-  import { ApiError, api } from "./api";
+  import { api, shownError } from "./api";
   import { copy, type Lang } from "./i18n";
 
   let { message = "", onready }: { message?: string; onready: () => Promise<void> } = $props();
@@ -50,7 +50,7 @@
         await onready();
       }
     } catch (caught) {
-      error = caught instanceof ApiError ? caught.message : text("error");
+      error = shownError(caught, lang);
     } finally {
       busy = false;
     }

@@ -20,6 +20,7 @@
   let hits = $state<{ path: string; project_id: string | null; excerpt: string }[]>([]);
   let factId = $state<number | null>(null);
   let armed = $state("");
+  let navCollapsed = $state(localStorage.getItem("atlas.nav") === "1");
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   const visible = $derived(
@@ -37,6 +38,11 @@
     lang = next;
     localStorage.setItem("atlas.lang", next);
     document.documentElement.lang = next;
+  }
+
+  function toggleNav(): void {
+    navCollapsed = !navCollapsed;
+    localStorage.setItem("atlas.nav", navCollapsed ? "1" : "0");
   }
 
   function runSearch(value: string): void {
@@ -110,24 +116,53 @@
   }
 </script>
 
-<div class="grid h-full grid-cols-1 bg-void md:grid-cols-[220px_1fr]">
-  <nav class="flex gap-1 overflow-x-auto border-b border-graphite bg-carbon p-2 md:block md:overflow-visible md:border-r md:border-b-0 md:p-3" aria-label={copy(lang, "product")}>
-    <p class="hidden px-2 text-sm text-paper md:mb-4 md:block">{copy(lang, "product")}</p>
+<div
+  class="grid h-full grid-cols-1 bg-void {navCollapsed
+    ? 'md:grid-cols-[56px_1fr]'
+    : 'md:grid-cols-[220px_1fr]'}"
+>
+  <nav
+    class="flex gap-1 overflow-x-auto border-b border-graphite bg-carbon p-2 md:flex md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-3"
+    aria-label={copy(lang, "product")}
+  >
+    <div class="mb-2 hidden items-center justify-between gap-2 md:flex">
+      {#if !navCollapsed}
+        <p class="px-2 text-sm font-medium text-paper">{copy(lang, "product")}</p>
+      {/if}
+      <button
+        type="button"
+        class="rounded-md px-2 py-1 text-xs text-fog"
+        onclick={toggleNav}
+        title={navCollapsed ? copy(lang, "expandNav") : copy(lang, "collapseNav")}
+      >
+        {navCollapsed ? "»" : "«"}
+      </button>
+    </div>
     {#each routes as id (id)}
       <a
-        class="block shrink-0 rounded-md px-2 py-1.5 text-sm {route === id ? 'text-accent' : 'text-mist'}"
+        class="block shrink-0 rounded-md px-2 py-1.5 text-sm transition-colors {route === id
+          ? 'bg-obsidian text-accent'
+          : 'text-mist hover:text-paper'}"
         href={`#/${id}`}
         aria-current={route === id ? "page" : undefined}
+        title={copy(lang, id)}
       >
-        {copy(lang, id)}
+        {navCollapsed ? copy(lang, id).slice(0, 1) : copy(lang, id)}
       </a>
     {/each}
   </nav>
   <div class="flex min-w-0 flex-col {factId !== null ? 'pr-[360px]' : ''}">
     <header class="flex flex-wrap items-center justify-between gap-2 border-b border-graphite px-4 py-3">
-      <p class="text-sm text-fog">{account.username} · {account.role}</p>
+      <p class="text-sm text-fog">
+        <span class="text-mist">{account.username}</span>
+        <span class="text-ash"> · {account.role}</span>
+      </p>
       <div class="flex items-center gap-3">
-        <button type="button" class="rounded-md border border-graphite px-3 py-1 text-sm text-fog" onclick={() => (palette = true)}>
+        <button
+          type="button"
+          class="rounded-md border border-graphite px-3 py-1 text-sm text-fog"
+          onclick={() => (palette = true)}
+        >
           {copy(lang, "palette")}
         </button>
         <button type="button" class="text-sm text-fog" onclick={() => setLang(lang === "en" ? "ru" : "en")}>
@@ -143,19 +178,31 @@
         <Projects {lang} onopen={openFact} />
       {:else if route === "services"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "services")}</h1>
-        <Records {lang} path="/api/v1/services" detail="/api/v1/services" onopen={openFact} canAct={account.role !== "viewer"} />
+        <Records
+          {lang}
+          path="/api/v1/services"
+          detail="/api/v1/services"
+          onopen={openFact}
+          canAct={account.role !== "viewer"}
+        />
       {:else if route === "schedules"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "schedules")}</h1>
         <Records {lang} path="/api/v1/schedules" detail={null} onopen={openFact} />
       {:else if route === "containers"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "containers")}</h1>
-        <Records {lang} path="/api/v1/containers" detail="/api/v1/containers" onopen={openFact} canAct={account.role !== "viewer"} />
+        <Records
+          {lang}
+          path="/api/v1/containers"
+          detail="/api/v1/containers"
+          onopen={openFact}
+          canAct={account.role !== "viewer"}
+        />
       {:else if route === "network"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "network")}</h1>
         <Records {lang} path="/api/v1/ports" detail={null} onopen={openFact} />
       {:else if route === "users"}
         <h1 class="mb-4 text-2xl text-paper">{copy(lang, "users")}</h1>
-        <Records {lang} path="/api/v1/users" detail={null} onopen={openFact} />
+        <Records {lang} path="/api/v1/users" detail="/api/v1/users" onopen={openFact} />
       {:else if route === "monitoring"}
         <Monitor {lang} />
       {:else if route === "logs"}
@@ -170,7 +217,6 @@
         <section>
           <h1 class="mb-4 text-2xl text-paper">{copy(lang, route)}</h1>
           <p class="max-w-xl text-sm text-fog">{copy(lang, "readOnly")}</p>
-          <p class="mt-4 text-sm text-mist">{copy(lang, "role")}: {account.role}</p>
         </section>
       {/if}
     </main>
@@ -182,13 +228,26 @@
 {/if}
 
 {#if palette}
-  <div class="fixed inset-0 z-30 grid place-items-start bg-void/80 pt-24" role="dialog" aria-modal="true" aria-label={copy(lang, "palette")}>
-    <div class="mx-auto w-full max-w-lg rounded-xl border border-graphite bg-obsidian p-3">
-      <input class="w-full rounded-md border border-graphite bg-void px-3 py-2 text-paper" bind:value={query} placeholder={copy(lang, "search")} />
+  <div
+    class="atlas-backdrop-in fixed inset-0 z-30 grid place-items-start bg-void/80 pt-24"
+    role="dialog"
+    aria-modal="true"
+    aria-label={copy(lang, "palette")}
+  >
+    <div class="atlas-fade-in mx-auto w-full max-w-lg rounded-xl border border-graphite bg-obsidian p-3">
+      <input
+        class="w-full rounded-md border border-graphite bg-void px-3 py-2 text-paper"
+        bind:value={query}
+        placeholder={copy(lang, "search")}
+      />
       <ul class="mt-2">
         {#each visible as id (id)}
           <li>
-            <button type="button" class="w-full rounded-md px-2 py-1.5 text-left text-mist hover:bg-graphite" onclick={() => go(id)}>
+            <button
+              type="button"
+              class="w-full rounded-md px-2 py-1.5 text-left text-mist hover:bg-graphite"
+              onclick={() => go(id)}
+            >
               {copy(lang, id)}
             </button>
           </li>

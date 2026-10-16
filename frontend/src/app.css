@@ -16,10 +16,15 @@
   --color-warn: #f5a524;
   --color-info: #02b8cc;
   --color-tag: #6366f1;
+  --color-chart: #8b5cf6;
   --font-sans: "Inter Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --radius-btn: 6px;
   --radius-card: 12px;
+  --radius-badge: 4px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-med: 220ms;
 }
 
 html,
@@ -47,4 +52,72 @@ a,
 input,
 select {
   font: inherit;
+}
+
+@keyframes atlas-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes atlas-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes atlas-pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes atlas-flash-row {
+  from {
+    background-color: color-mix(in srgb, var(--color-info) 22%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes atlas-tick {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.atlas-fade-in {
+  animation: atlas-fade-in var(--dur-med) var(--ease-out);
+}
+
+.atlas-backdrop-in {
+  animation: atlas-backdrop-in var(--dur-fast) var(--ease-out);
+}
+
+.atlas-live-dot {
+  animation: atlas-pulse-live 1.6s ease-in-out infinite;
+}
+
+.atlas-flash-row {
+  animation: atlas-flash-row 0.9s var(--ease-out);
+}
+
+.atlas-tick {
+  animation: atlas-tick var(--dur-fast) var(--ease-out);
 }

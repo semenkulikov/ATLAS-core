@@ -60,6 +60,17 @@ def test_owner_can_read_and_a_viewer_cannot_scan(tmp_path: Path) -> None:
     assert again.status_code == 304
     assert "frame-ancestors 'none'" in host.headers["content-security-policy"]
 
+    users = client.get("/api/v1/users").json()["items"]
+    assert any(item["key"] == "deploy" for item in users)
+    deploy = client.get("/api/v1/users/deploy")
+    assert deploy.status_code == 200
+    deploy_body = deploy.json()
+    assert deploy_body["entity"]["key"] == "deploy"
+    assert any(row["predicate"] == "user.shell" for row in deploy_body["facts"])
+    unit = client.get("/api/v1/services/nginx.service")
+    assert unit.status_code == 200
+    assert any(row["predicate"] == "unit.active" for row in unit.json()["facts"])
+
     projects = client.get("/api/v1/projects").json()["items"]
     shop = next(item for item in projects if item["payload"]["root_path"] == "/opt/shop")
     card = client.get(f"/api/v1/projects/{shop['key']}")

@@ -1,6 +1,6 @@
 /** Shared shapes returned by the inventory API. */
 
-import { copy, type Lang } from "./i18n";
+import { copy, type CopyKey, type Lang } from "./i18n";
 
 export type Entity = {
   kind: string;
@@ -57,7 +57,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = csrfToken();
     if (token) headers.set("x-csrf-token", token);
   }
-  const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  let response: Response;
+  try {
+    response = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, "network.error", "network");
+  }
   if (response.status === 304) return undefined as T;
   const text = await response.text();
   const payload = text ? (JSON.parse(text) as Record<string, unknown>) : {};
@@ -71,13 +76,43 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
+const CODE_KEYS: Record<string, CopyKey> = {
+  "scan.missing": "noScan",
+  "auth.rejected": "rejected",
+  "auth.forbidden": "forbidden",
+  "auth.csrf": "csrf",
+  "record.missing": "errRecordMissing",
+  "project.missing": "errProjectMissing",
+  "control.off": "errControlOff",
+  "control.disabled": "errControlOff",
+  "action.failed": "errActionFailed",
+  "action.confirm": "errActionConfirm",
+  "action.denied": "forbidden",
+  "scan.failed": "errScanFailed",
+  "logs.source": "errLogsSource",
+  "metrics.query": "errMetricsQuery",
+  "http.limit": "errHttpLimit",
+  "network.error": "errNetwork",
+  "http.error": "errGeneric",
+};
+
 export function shownError(error: unknown, lang: Lang): string {
   if (error instanceof ApiError) {
-    if (error.code === "scan.missing") return copy(lang, "noScan");
-    if (error.code === "auth.rejected") return copy(lang, "rejected");
-    if (error.code === "auth.forbidden") return copy(lang, "forbidden");
-    if (error.code === "auth.csrf") return copy(lang, "csrf");
+    const key = CODE_KEYS[error.code];
+    if (key) return copy(lang, key);
+    if (error.code.startsWith("auth.")) return copy(lang, "forbidden");
+    if (error.code.startsWith("action.")) return copy(lang, "errActionFailed");
+    if (error.code.startsWith("control.")) return copy(lang, "errControlOff");
+    return copy(lang, "errGeneric");
   }
-  if (error instanceof Error && error.message) return error.message;
-  return copy(lang, "error");
+  if (error instanceof TypeError) return copy(lang, "errNetwork");
+  return copy(lang, "errGeneric");
+}
+
+/** Raw backend detail for optional “Technical details” in the error modal. */
+export function errorDetail(error: unknown): string {
+  if (error instanceof ApiError && error.message && error.message !== "network") {
+    return `${error.code}: ${error.message}`;
+  }
+  return "";
 }
