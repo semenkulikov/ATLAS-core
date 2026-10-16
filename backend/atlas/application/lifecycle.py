@@ -6,13 +6,14 @@ that points outside that prefix is refused.
 
 from __future__ import annotations
 
+import socket
 from collections.abc import Callable
 from pathlib import Path
 
 from atlas import __version__
 from atlas.application.actions import control_enabled
 from atlas.application.alerts import list_channels
-from atlas.storage.db import Store
+from atlas.storage.db import MIGRATIONS, Store, migration_paths, read_migration_sql
 
 PRODUCT_PATHS = (
     "opt/atlas",
@@ -25,7 +26,15 @@ DATA_PATH = "var/lib/atlas"
 Runner = Callable[[list[str]], None]
 
 
-def diagnose(store: Store, database: Path, *, observed_mode: int | None = None) -> list[str]:
+def diagnose(
+    store: Store,
+    database: Path,
+    *,
+    observed_mode: int | None = None,
+    web_socket: Path | None = None,
+    helper_socket: Path | None = None,
+    migrations: Path | None = None,
+) -> list[str]:
     """Return human-readable checks. Unsafe findings start with ``warning:``."""
     notes = [f"version {__version__}"]
     mode = database.stat().st_mode & 0o777 if observed_mode is None else observed_mode
@@ -39,7 +48,41 @@ def diagnose(store: Store, database: Path, *, observed_mode: int | None = None) 
         notes.append(f"warning: {len(enabled)} alert channel(s) can send data off the host")
     else:
         notes.append("alert channels are off")
+    notes.extend(_migration_notes(migrations or MIGRATIONS))
+    notes.extend(_socket_notes("panel", web_socket or Path("/run/atlas/web.sock")))
+    notes.extend(_socket_notes("helper", helper_socket or Path("/run/atlas/helper.sock")))
     return notes
+
+
+def _migration_notes(directory: Path) -> list[str]:
+    if not directory.is_dir():
+        return [f"warning: migrations directory missing: {directory}"]
+    junk = [
+        path.name
+        for path in directory.glob("*.sql")
+        if path.name not in {item.name for item in migration_paths(directory)}
+    ]
+    notes: list[str] = [f"migrations {len(migration_paths(directory))} file(s)"]
+    if junk:
+        notes.append(f"warning: ignored non-migration sql file(s): {', '.join(sorted(junk))}")
+    for path in migration_paths(directory):
+        try:
+            read_migration_sql(path)
+        except UnicodeDecodeError:
+            notes.append(f"warning: migration is not UTF-8: {path.name}")
+    return notes
+
+
+def _socket_notes(label: str, path: Path) -> list[str]:
+    if not path.exists():
+        return [f"warning: {label} socket missing ({path}); is atlas.service running?"]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(1.0)
+            client.connect(str(path))
+    except OSError:
+        return [f"warning: {label} socket exists but is not accepting connections ({path})"]
+    return [f"{label} socket is listening"]
 
 
 def uninstall(prefix: Path, *, purge: bool, run: Runner | None = None) -> list[str]:

@@ -6,6 +6,7 @@ After=network.target systemd-tmpfiles-setup.service
 Type=simple
 User=atlas
 Group=atlas
+ExecStartPre=-/bin/rm -f /run/atlas/web.sock
 ExecStart=/opt/atlas/.venv/bin/atlas serve --db /var/lib/atlas/atlas.db --root / --helper-socket /run/atlas/helper.sock
 RuntimeDirectory=atlas
 RuntimeDirectoryPreserve=yes

@@ -14,6 +14,7 @@ from atlas.domain import CollectorResult, Entity, Fact
 from atlas.redact import mask_secrets
 
 MIGRATIONS = Path(__file__).resolve().parent / "migrations"
+_MIGRATION_NAME = re.compile(r"^\d{3}_[a-z0-9_]+\.sql$")
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -29,17 +30,38 @@ def connect(path: Path) -> sqlite3.Connection:
     return conn
 
 
-def apply_migrations(conn: sqlite3.Connection) -> None:
+def migration_paths(directory: Path | None = None) -> list[Path]:
+    """Return ordered migration files. Ignores AppleDouble ``._*`` and other junk."""
+    root = directory or MIGRATIONS
+    return sorted(path for path in root.glob("*.sql") if _MIGRATION_NAME.match(path.name))
+
+
+def read_migration_sql(path: Path) -> str:
+    """Read one migration as UTF-8. Name the file when decoding fails."""
+    raw = path.read_bytes()
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise UnicodeDecodeError(
+            exc.encoding,
+            exc.object,
+            exc.start,
+            exc.end,
+            f"{exc.reason} in migration {path}",
+        ) from None
+
+
+def apply_migrations(conn: sqlite3.Connection, directory: Path | None = None) -> None:
     """Apply pending SQL migrations in filename order."""
     conn.execute(
         "CREATE TABLE IF NOT EXISTS schema_migrations ("
         "version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
     )
     applied = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
-    for path in sorted(MIGRATIONS.glob("*.sql")):
+    for path in migration_paths(directory):
         if path.name in applied:
             continue
-        conn.executescript(path.read_text(encoding="utf-8"))
+        conn.executescript(read_migration_sql(path))
         conn.execute(
             "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
             (path.name, datetime.now(UTC).isoformat()),

@@ -77,7 +77,39 @@ else
   build_host
 fi
 
-tar -C "$root/dist" -czf "$root/dist/${name}.tar.gz" "$name"
+# Drop AppleDouble leftovers and refuse non-UTF-8 migrations before packaging.
+find "$stage" -name '._*' -type f -delete 2>/dev/null || true
+mig="$stage/app/atlas/storage/migrations"
+if [ ! -d "$mig" ]; then
+  echo "staged tree is missing migrations at $mig" >&2
+  exit 1
+fi
+for sql in "$mig"/*.sql; do
+  base=$(basename "$sql")
+  case "$base" in
+    [0-9][0-9][0-9]_*.sql) ;;
+    *)
+      echo "refusing unexpected migration name: $base" >&2
+      exit 1
+      ;;
+  esac
+  if ! python3 -c "from pathlib import Path; Path(r'''$sql''').read_text(encoding='utf-8')"; then
+    echo "migration is not UTF-8: $sql" >&2
+    exit 1
+  fi
+done
+
+# Portable archive: no macOS xattrs (avoids LIBARCHIVE.xattr warnings on Linux).
+export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
+(
+  cd "$root/dist"
+  if tar --help 2>&1 | grep -q -- '--format'; then
+    tar --format=ustar -czf "${name}.tar.gz" "$name"
+  else
+    tar -czf "${name}.tar.gz" "$name"
+  fi
+)
 # Basename only — get-atlas.sh runs shasum -c next to the tarball.
 (
   cd "$root/dist"

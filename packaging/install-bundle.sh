@@ -32,6 +32,8 @@ cp -a "$root/python" /opt/atlas/python
 cp -a "$root/app" /opt/atlas/app
 cp -a "$root/frontend/dist" /opt/atlas/frontend/dist
 cp -a "$root/packaging" /opt/atlas/packaging
+# Drop AppleDouble leftovers if a Mac archive left any behind.
+find /opt/atlas/app -name '._*' -type f -delete 2>/dev/null || true
 chown -R atlas:atlas /var/lib/atlas
 chmod 0700 /var/lib/atlas
 install -m 0755 "$root/packaging/atlas-cli.sh" /usr/local/bin/atlas
@@ -63,6 +65,8 @@ printf '%s\n' "Installed from a signed archive. The interpreter is /opt/atlas/py
 
 systemctl daemon-reload
 systemctl enable atlas.service atlas-helper.service
+rm -f /run/atlas/web.sock /run/atlas/helper.sock
+systemctl reset-failed atlas.service atlas-helper.service 2>/dev/null || true
 systemctl restart atlas-helper.service atlas.service
 
 i=0
@@ -76,6 +80,15 @@ done
 if [ ! -S /run/atlas/web.sock ]; then
   echo "The panel socket did not appear." >&2
   systemctl --no-pager --full status atlas.service >&2 || true
+  journalctl -u atlas.service -u atlas-helper.service -n 40 --no-pager >&2 || true
+  exit 1
+fi
+
+if ! /opt/atlas/python/bin/python3 -c \
+  "import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(2); s.connect('/run/atlas/web.sock'); s.close()"; then
+  echo "The panel socket exists but is not accepting connections." >&2
+  systemctl --no-pager --full status atlas.service >&2 || true
+  journalctl -u atlas.service -u atlas-helper.service -n 40 --no-pager >&2 || true
   exit 1
 fi
 
@@ -105,6 +118,7 @@ fi
 
 echo "Open the panel from your workstation:"
 echo "  ssh -L 127.0.0.1:8765:/run/atlas/web.sock root@$(hostname -f 2>/dev/null || hostname)"
+echo "If the tunnel fails, run: atlas doctor"
 if [ "$has_owner" -eq 0 ]; then
   echo "One-time enrollment token:"
   sudo -u atlas env PYTHONPATH=/opt/atlas/app /opt/atlas/python/bin/python3 -m atlas.cli.main token new --db /var/lib/atlas/atlas.db

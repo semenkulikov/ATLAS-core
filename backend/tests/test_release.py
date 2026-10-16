@@ -122,12 +122,25 @@ def test_doctor_and_expose(tmp_path: Path) -> None:
     store = Store.open(database)
     store.close()
     database.chmod(0o600)
-    notes = diagnose(Store.open(database), database)
+    missing = tmp_path / "missing.sock"
+    notes = diagnose(
+        Store.open(database),
+        database,
+        web_socket=missing,
+        helper_socket=missing,
+    )
     assert any(note == "database mode is 0600" for note in notes)
     assert any(note == "alert channels are off" for note in notes)
+    assert any("panel socket missing" in note for note in notes)
     database.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
     observed = database.stat().st_mode & 0o777
-    warn = diagnose(Store.open(database), database, observed_mode=observed)
+    warn = diagnose(
+        Store.open(database),
+        database,
+        observed_mode=observed,
+        web_socket=missing,
+        helper_socket=missing,
+    )
     assert any(note.startswith("warning:") for note in warn)
     database.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
     assert main(["doctor", "--db", str(database)]) == 1

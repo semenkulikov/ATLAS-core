@@ -187,6 +187,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         uvicorn.run(create_app(store, settings), host=host, port=int(port_text), log_config=None)
         return 0
     socket_path = args.socket or "/run/atlas/web.sock"
+    _unlink_socket(socket_path)
     _tighten_socket(socket_path)
     settings = Settings(
         Path(args.root),
@@ -196,6 +197,18 @@ def cmd_serve(args: argparse.Namespace) -> int:
     )
     uvicorn.run(create_app(store, settings), uds=socket_path, log_config=None)
     return 0
+
+
+def _unlink_socket(socket_path: str) -> None:
+    """Remove a stale Unix socket so bind can succeed after a crash."""
+    import os
+
+    try:
+        os.unlink(socket_path)
+    except FileNotFoundError:
+        return
+    except OSError:
+        return
 
 
 def _tighten_socket(socket_path: str) -> None:

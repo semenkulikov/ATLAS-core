@@ -2,6 +2,17 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.0.3] - 2026-10-16
+
+### Fixed
+- Crash-loop on Mac-built archives: ignore AppleDouble `._*.sql` and only apply `NNN_*.sql` UTF-8 migrations.
+- Stale `/run/atlas/web.sock` after failed starts; unlink before bind and on service start.
+- Installer verifies the panel socket accepts connections before reporting success.
+- Release tarballs are packed as ustar without macOS xattrs.
+
+### Changed
+- `atlas doctor` reports migration junk and whether panel/helper sockets are listening.
+
 ## [1.0.2] - 2026-10-16
 
 ### Added
