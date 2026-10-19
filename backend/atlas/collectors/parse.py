@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import re
 import socket
 from dataclasses import dataclass, field
@@ -416,9 +417,37 @@ def _decode_address(hex_addr: str) -> str:
     return str(socket.inet_ntop(socket.AF_INET6, b"".join(groups)))
 
 
+def listen_exposure(address: str) -> str:
+    """Classify a bind address as ``local``, ``lan``, or ``external``.
+
+    Loopback (``127.0.0.0/8`` and ``::1``) stays on this host. Private and
+    link-local addresses are the internal network. Wildcard and public
+    addresses are treated as reachable from the internet.
+    """
+    text = address.strip().lower()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    if "%" in text:
+        text = text.split("%", 1)[0]
+    if text in {"*", ""}:
+        return "external"
+    try:
+        ip = ipaddress.ip_address(text)
+    except ValueError:
+        return "external"
+    if ip.is_loopback:
+        return "local"
+    if ip.is_private or ip.is_link_local or ip.is_unspecified:
+        # 0.0.0.0 and :: listen on every interface, so they are external.
+        if ip.is_unspecified:
+            return "external"
+        return "lan"
+    return "external"
+
+
 def is_exposed_address(address: str) -> bool:
     """Return whether a bind address accepts connections from outside the host."""
-    return address not in {"127.0.0.1", "::1"}
+    return listen_exposure(address) != "local"
 
 
 def fingerprint_authorized_keys(text: str) -> list[tuple[int, str, str, str]]:

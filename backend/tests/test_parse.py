@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 from atlas.collectors.parse import (
     fingerprint_authorized_keys,
     is_exposed_address,
+    listen_exposure,
     parse_crontab,
     parse_nginx,
     parse_os_release,
@@ -36,6 +37,12 @@ def test_proc_net_decodes_listen_addresses() -> None:
     assert is_exposed_address("0.0.0.0") is True
     assert is_exposed_address("127.0.0.1") is False
     assert is_exposed_address("::1") is False
+    assert listen_exposure("127.0.0.53") == "local"
+    assert listen_exposure("127.0.1.1") == "local"
+    assert listen_exposure("::1") == "local"
+    assert listen_exposure("0.0.0.0") == "external"
+    assert listen_exposure("::") == "external"
+    assert listen_exposure("10.0.0.5") == "lan"
 
 
 def test_nginx_proxy_and_cron_and_unit_lines() -> None:
