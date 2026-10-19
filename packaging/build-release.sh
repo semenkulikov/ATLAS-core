@@ -10,13 +10,38 @@ python_url="https://github.com/astral-sh/python-build-standalone/releases/downlo
 name="atlas-${version}-linux-x86_64"
 stage="$root/dist/$name"
 
-if [ ! -f "$root/frontend/dist/index.html" ]; then
-  npm --prefix "$root/frontend" ci
-  npm --prefix "$root/frontend" run build
+# Always rebuild the panel. A stale frontend/dist once shipped the 1.0.x UI inside 1.1.0.
+rm -rf "$root/frontend/dist"
+npm --prefix "$root/frontend" ci
+npm --prefix "$root/frontend" run build
+if ! grep -q 'lang="ru"' "$root/frontend/dist/index.html"; then
+  echo "frontend/dist/index.html must declare lang=ru" >&2
+  exit 1
+fi
+js=$(find "$root/frontend/dist/assets" -name 'index-*.js' | head -n 1)
+if [ -z "$js" ] || ! grep -q 'Приложения' "$js"; then
+  echo "built panel JS is missing the Applications label (Приложения)" >&2
+  exit 1
 fi
 
 rm -rf "$stage"
 mkdir -p "$root/dist"
+
+# Static minisign for hosts that do not have it (apply-update.sh refuses unsigned archives).
+minisign_url="https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+minisign_stage=$(mktemp -d)
+curl -fsSL -o "$minisign_stage/minisign.tar.gz" "$minisign_url"
+tar -xzf "$minisign_stage/minisign.tar.gz" -C "$minisign_stage"
+minisign_bin=$(find "$minisign_stage" -type f -name minisign | head -n 1)
+if [ -z "$minisign_bin" ] || [ ! -x "$minisign_bin" ]; then
+  # Archive may lack +x; still accept a file named minisign.
+  minisign_bin=$(find "$minisign_stage" -type f -name minisign | head -n 1)
+fi
+if [ -z "$minisign_bin" ]; then
+  echo "minisign binary missing from $minisign_url" >&2
+  exit 1
+fi
+chmod 755 "$minisign_bin"
 
 build_with_docker() {
   docker run --rm --platform linux/amd64 \
@@ -57,12 +82,16 @@ build_host() {
   rm -rf "$wheelhouse"
   cp -a "$root/frontend/dist" "$stage/frontend/dist"
   cp "$root/packaging/atlas.service" "$root/packaging/atlas-helper.service" \
-    "$root/packaging/atlas.tmpfiles" "$root/packaging/pick-uid.sh" \
-    "$root/packaging/remove-atlas.sh" "$root/packaging/atlas-cli.sh" \
+    "$root/packaging/atlas-update.service" "$root/packaging/atlas.tmpfiles" \
+    "$root/packaging/pick-uid.sh" "$root/packaging/remove-atlas.sh" \
+    "$root/packaging/atlas-cli.sh" "$root/packaging/apply-update.sh" \
+    "$root/packaging/minisign.pub" \
     "$stage/packaging/"
+  cp "$minisign_bin" "$stage/packaging/minisign"
   cp "$root/packaging/install-bundle.sh" "$stage/install.sh"
   chmod 755 "$stage/install.sh" "$stage/packaging/pick-uid.sh" \
-    "$stage/packaging/remove-atlas.sh" "$stage/packaging/atlas-cli.sh"
+    "$stage/packaging/remove-atlas.sh" "$stage/packaging/atlas-cli.sh" \
+    "$stage/packaging/apply-update.sh" "$stage/packaging/minisign"
   # Bundled interpreter may not run on this host; mark it executable for Linux.
   chmod 755 "$stage/python/bin/"* 2>/dev/null || true
   echo "staged $version (host cross-install)"
@@ -76,6 +105,24 @@ else
   echo "Docker unavailable; building with host pip (manylinux wheels)." >&2
   build_host
 fi
+
+# Docker path also needs update tooling and the panel checks already ran on the host.
+if [ ! -f "$stage/packaging/minisign" ]; then
+  mkdir -p "$stage/packaging"
+  cp "$root/packaging/atlas-update.service" "$root/packaging/apply-update.sh" \
+    "$root/packaging/minisign.pub" "$stage/packaging/" 2>/dev/null || true
+  cp "$minisign_bin" "$stage/packaging/minisign"
+  chmod 755 "$stage/packaging/minisign" "$stage/packaging/apply-update.sh"
+fi
+if [ ! -x "$stage/packaging/minisign" ] || [ ! -f "$stage/packaging/minisign.pub" ]; then
+  echo "staged tree is missing packaging/minisign or minisign.pub" >&2
+  exit 1
+fi
+if [ ! -f "$stage/packaging/apply-update.sh" ] || [ ! -f "$stage/packaging/atlas-update.service" ]; then
+  echo "staged tree is missing apply-update.sh or atlas-update.service" >&2
+  exit 1
+fi
+rm -rf "$minisign_stage"
 
 # Drop AppleDouble leftovers and refuse non-UTF-8 migrations before packaging.
 find "$stage" -name '._*' -type f -delete 2>/dev/null || true
