@@ -379,7 +379,26 @@ async def openapi(request: Request) -> Response:
 
 async def host(request: Request) -> Response:
     _require(request, _READ)
-    return _entities(request, "os", extra=True)
+    state = _state(request)
+    scan_id = _scan(state)
+    finished = state.store.conn.execute(
+        "SELECT finished_at FROM scans WHERE id = ?",
+        (scan_id,),
+    ).fetchone()
+    passport = {
+        kind: state.store.entities(scan_id, kind)
+        for kind in ("resources", "network", "sshd", "sessions", "site")
+    }
+    return _json(
+        request,
+        {
+            "scan_id": scan_id,
+            "collected_at": None if finished is None else finished["finished_at"],
+            "entities": state.store.entities(scan_id, "os"),
+            "sources": state.store.sources(scan_id),
+            "passport": passport,
+        },
+    )
 
 
 async def services(request: Request) -> Response:
