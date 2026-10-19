@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from atlas import __version__
 
@@ -15,7 +16,15 @@ _VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _DEFAULT_REPO = "semenkulikov/ATLAS-core"
 _CACHE_SECONDS = 300.0
 
-_cache: dict[str, object] = {"fetched_at": 0.0, "latest": None, "error": None}
+
+@dataclass
+class _Cache:
+    fetched_at: float = 0.0
+    latest: str | None = None
+    error: str | None = None
+
+
+_cache = _Cache()
 
 
 def parse_tag(tag: str) -> str | None:
@@ -63,13 +72,12 @@ def fetch_latest(
     """
     clock = now or time.time
     stamped = clock()
-    cached_at = float(_cache.get("fetched_at") or 0.0)
-    if stamped - cached_at < cache_seconds and _cache.get("latest") is not None:
-        latest = str(_cache["latest"])
+    if stamped - _cache.fetched_at < cache_seconds and _cache.latest is not None:
+        cached = _cache.latest
         return {
             "current": __version__,
-            "latest": latest,
-            "update_available": is_newer(latest, __version__),
+            "latest": cached,
+            "update_available": is_newer(cached, __version__),
             "error": None,
         }
 
@@ -84,11 +92,11 @@ def fetch_latest(
         error = str(exc) or exc.__class__.__name__
 
     if latest is not None:
-        _cache["fetched_at"] = stamped
-        _cache["latest"] = latest
-        _cache["error"] = None
+        _cache.fetched_at = stamped
+        _cache.latest = latest
+        _cache.error = None
     else:
-        _cache["error"] = error
+        _cache.error = error
 
     return {
         "current": __version__,
@@ -100,9 +108,9 @@ def fetch_latest(
 
 def clear_cache() -> None:
     """Drop the in-process GitHub cache (tests)."""
-    _cache["fetched_at"] = 0.0
-    _cache["latest"] = None
-    _cache["error"] = None
+    _cache.fetched_at = 0.0
+    _cache.latest = None
+    _cache.error = None
 
 
 def _http_get(url: str) -> object:
