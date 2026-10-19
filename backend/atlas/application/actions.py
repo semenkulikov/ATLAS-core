@@ -16,7 +16,7 @@ from atlas.redact import mask_secrets
 from atlas.security.tokens import verify_totp
 from atlas.storage.db import Store
 
-_OWNER_ONLY = ("journal.", "account.", "ssh.", "host.")
+_OWNER_ONLY = ("journal.", "account.", "ssh.", "host.", "app.")
 
 
 class ActionError(Exception):

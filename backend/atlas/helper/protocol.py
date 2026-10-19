@@ -12,6 +12,7 @@ from dataclasses import dataclass
 _UNIT = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9:._@-]{0,127}$")
 _NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$")
 _USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PUBLIC_KEY = re.compile(
     r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|sk-ssh-ed25519@openssh.com) "
     r"[A-Za-z0-9+/=]+(?: [\x20-\x7e]{0,80})?$"
@@ -120,6 +121,14 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
         hostname = _token(params.get("hostname"), _NAME, "hostname")
         command = "reboot" if op == "host.reboot" else "poweroff"
         return Plan(op, ("systemctl", command), "critical", hostname, delay_seconds=10)
+    if op == "app.update":
+        version = _token(params.get("version"), _VERSION, "version")
+        return Plan(
+            op,
+            ("systemctl", "start", "atlas-update.service"),
+            "high",
+            version,
+        )
     if op in {"ssh.add", "ssh.remove"}:
         username = _token(params.get("username"), _USER, "username")
         key = params.get("key")

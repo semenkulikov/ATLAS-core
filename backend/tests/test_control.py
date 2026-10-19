@@ -50,6 +50,14 @@ def test_whitelist_refuses_a_protected_unit_and_a_shell_character() -> None:
     reboot = build_plan("host.reboot", {"hostname": "web-1"})
     assert reboot.delay_seconds == 10
     assert reboot.argv == ("systemctl", "reboot")
+    update = build_plan("app.update", {"version": "1.1.2"})
+    assert update.risk == "high"
+    assert update.confirm == "1.1.2"
+    assert update.argv == ("systemctl", "start", "atlas-update.service")
+    with pytest.raises(ProtocolError):
+        build_plan("app.update", {"version": "v1.1.2"})
+    with pytest.raises(ProtocolError):
+        build_plan("app.update", {"version": "1.1.2;reboot"})
     remove = build_plan("container.remove", {"name": "atlas-probe", "force": True})
     assert remove.argv == ("docker", "rm", "--force", "atlas-probe")
     listed = build_plan("read.dir", {"path": "/etc/sudoers.d"})

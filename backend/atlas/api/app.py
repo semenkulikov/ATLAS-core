@@ -35,6 +35,7 @@ from atlas.application.audit import list_audit, verify_chain
 from atlas.application.logs import LogError, read_log
 from atlas.application.report import build_report, render_html, render_json, render_markdown
 from atlas.application.scan import run_scan
+from atlas.application.update import fetch_latest
 from atlas.collectors.view import open_view
 from atlas.logging import log_event
 from atlas.metrics.sampler import default_sampler
@@ -89,7 +90,7 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     """Build the API. OpenAPI is not mounted publicly; owners fetch it explicitly."""
-    app = FastAPI(title="ATLAS", version="1.1.0", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="ATLAS", version="1.1.1", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.atlas = AppState(
         store,
         settings,
@@ -130,6 +131,7 @@ def create_app(
     app.add_api_route("/api/v1/logs", logs, methods=["GET"])
     app.add_api_route("/api/v1/export", export, methods=["GET"])
     app.add_api_route("/api/v1/control", control_status, methods=["GET"])
+    app.add_api_route("/api/v1/update", update_status, methods=["GET"])
     app.add_api_route("/api/v1/audit", audit_log, methods=["GET"])
     app.add_api_route("/api/v1/actions/{op}", perform_action, methods=["POST"])
     app.add_api_route("/api/v1/alerts", alerts, methods=["GET"])
@@ -306,6 +308,11 @@ async def control_status(request: Request) -> Response:
             "hostname": scanned_hostname(state.store),
         },
     )
+
+
+async def update_status(request: Request) -> Response:
+    _require(request, _READ)
+    return _json(request, fetch_latest())
 
 
 async def audit_log(request: Request) -> Response:

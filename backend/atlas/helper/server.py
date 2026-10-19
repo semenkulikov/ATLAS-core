@@ -7,6 +7,7 @@ macOS, where that socket option does not exist.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -38,6 +39,7 @@ class HelperServer:
         keys_root: Path | None = None,
         delay_scale: float = 1.0,
         socket_gid: int | None = None,
+        update_request_path: Path | None = None,
     ) -> None:
         self.path = path
         self.allowed_uids = allowed_uids
@@ -46,6 +48,7 @@ class HelperServer:
         self.keys_root = keys_root or Path("/")
         self.delay_scale = delay_scale
         self.socket_gid = socket_gid
+        self.update_request_path = update_request_path or Path("/run/atlas/update-request")
         self._pending: dict[str, threading.Timer] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -124,6 +127,8 @@ class HelperServer:
             except ProtocolError as exc:
                 return {"ok": False, "error": exc.message}
             return {"ok": True, "result": message}
+        if plan.op == "app.update":
+            return self._start_update(plan)
         if plan.op == "read.file":
             return self._read_file(plan.confirm)
         if plan.op == "read.dir":
@@ -196,6 +201,20 @@ class HelperServer:
                 return {"ok": False, "error": f"{sock}: {exc.__class__.__name__}"}
             return {"ok": True, "body": body, "origin": str(sock)}
         return {"ok": False, "error": "container engine", "status": "absent"}
+
+    def _start_update(self, plan: Plan) -> dict[str, object]:
+        """Record the target version, then start the oneshot update unit."""
+        path = self.update_request_path
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"{plan.confirm}\n", encoding="utf-8")
+        except OSError as exc:
+            return {"ok": False, "error": exc.strerror or "could not write update request"}
+        outcome = self._run(plan)
+        if not outcome.get("ok"):
+            with contextlib.suppress(OSError):
+                path.unlink(missing_ok=True)
+        return outcome
 
     def _schedule(self, plan: Plan) -> dict[str, object]:
         token = os.urandom(8).hex()
