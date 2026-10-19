@@ -2,6 +2,16 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.1] - 2026-10-19
+
+### Fixed
+- Release builds always rebuild the panel. 1.1.0 shipped a stale frontend with the previous navigation.
+
+### Added
+- Settings → About shows the installed version and the latest GitHub release.
+- Owner can start a signed self-update from the panel (`app.update` → `atlas-update.service`).
+- Release archive bundles a minisign binary so upgrades verify the signature without a host package.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added
