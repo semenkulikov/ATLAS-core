@@ -1,37 +1,74 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import Audit from "./Audit.svelte";
-  import Changes from "./Changes.svelte";
-  import Settings from "./Settings.svelte";
-  import EvidenceDrawer from "./EvidenceDrawer.svelte";
+  import Access from "./Access.svelte";
+  import Apps from "./Apps.svelte";
+  import Events from "./Events.svelte";
   import Logs from "./Logs.svelte";
   import Monitor from "./Monitor.svelte";
+  import Network from "./Network.svelte";
   import Overview from "./Overview.svelte";
-  import Projects from "./Projects.svelte";
-  import Records from "./Records.svelte";
+  import Settings from "./Settings.svelte";
+  import System from "./System.svelte";
   import { api, type Account } from "./api";
-  import { copy, routeFromHash, routes, type Lang, type RouteId } from "./i18n";
+  import { exposureOf, textOf } from "./format";
+  import { copy, hashFor, navRoutes, parseHash, type Lang, type Place, type RouteId } from "./i18n";
+  import { loadPanel, refreshedAt, type PanelData } from "./inventory";
+  import { proof } from "./proof";
+  import { selectedApp } from "./selection";
+  import Icon from "./ui/Icon.svelte";
 
   let { account, onsignedout }: { account: Account; onsignedout: () => Promise<void> } = $props();
-  let lang = $state<Lang>(localStorage.getItem("atlas.lang") === "ru" ? "ru" : "en");
-  let route = $state<RouteId>("overview");
+  let lang = $state<Lang>(localStorage.getItem("atlas.lang") === "en" ? "en" : "ru");
+  let place = $state<Place>(parseHash(location.hash));
+  let collapsed = $state(false);
   let palette = $state(false);
+  let help = $state(false);
+  let more = $state(false);
+  let menu = $state(false);
+  let switcher = $state(false);
   let query = $state("");
-  let hits = $state<{ path: string; project_id: string | null; excerpt: string }[]>([]);
-  let factId = $state<number | null>(null);
+  let panel = $state<PanelData | null>(null);
   let armed = $state("");
-  let navCollapsed = $state(localStorage.getItem("atlas.nav") === "1");
-  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  const phoneNav = ["overview", "apps", "monitoring", "network"] as const;
+  const letters: Record<string, RouteId> = {
+    o: "overview",
+    a: "apps",
+    m: "monitoring",
+    n: "network",
+    u: "access",
+    l: "logs",
+    e: "events",
+    s: "settings",
+    y: "system",
+  };
 
-  const visible = $derived(
-    routes.filter((id) => copy(lang, id).toLowerCase().includes(query.toLowerCase())),
+  const icons: Record<string, string> = {
+    overview: "overview",
+    apps: "apps",
+    monitoring: "monitoring",
+    network: "network",
+    access: "access",
+    logs: "logs",
+    events: "events",
+    settings: "settings",
+    system: "settings",
+  };
+
+  const orphanPorts = $derived(
+    (panel?.system.ports ?? []).filter(
+      (row) => exposureOf(textOf(row.payload.address)) === "external" && !row.payload.process,
+    ).length,
+  );
+  const currentApp = $derived(panel?.apps.find((item) => item.id === $selectedApp) ?? null);
+  const foundApps = $derived(
+    (panel?.apps ?? []).filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase())),
   );
 
   function go(id: RouteId): void {
-    location.hash = `#/${id}`;
+    location.hash = id === "system" ? "#/system/services" : `#/${id}`;
     palette = false;
+    more = false;
     query = "";
-    hits = [];
   }
 
   function setLang(next: Lang): void {
@@ -41,41 +78,32 @@
   }
 
   function toggleNav(): void {
-    navCollapsed = !navCollapsed;
-    localStorage.setItem("atlas.nav", navCollapsed ? "1" : "0");
+    collapsed = !collapsed;
+    localStorage.setItem("atlas.nav", collapsed ? "1" : "0");
   }
 
-  function runSearch(value: string): void {
-    clearTimeout(searchTimer);
-    if (value.trim().length < 2) {
-      hits = [];
-      return;
-    }
-    searchTimer = setTimeout(() => {
-      void api<{ hits: { path: string; project_id: string | null; excerpt: string }[] }>(
-        `/api/v1/search?q=${encodeURIComponent(value.trim())}`,
-      )
-        .then((body) => {
-          hits = body.hits.slice(0, 8);
-        })
-        .catch(() => {
-          hits = [];
-        });
-    }, 200);
+  function sync(): void {
+    const next = parseHash(location.hash);
+    place = next;
+    if (!location.hash || location.hash === "#" || location.hash === "#/") return;
+    const canonical = hashFor(next);
+    if (location.hash !== canonical) history.replaceState(null, "", canonical);
   }
-
-  $effect(() => {
-    if (palette) runSearch(query);
-  });
 
   onMount(() => {
-    const apply = () => {
-      route = routeFromHash(location.hash);
-    };
-    apply();
+    const stored = localStorage.getItem("atlas.nav");
+    const wide = window.matchMedia("(min-width: 1280px)").matches;
+    collapsed = stored === null ? !wide : stored === "1";
     document.documentElement.lang = lang;
-    const onHash = () => apply();
+    sync();
+    void loadPanel()
+      .then((body) => {
+        panel = body;
+      })
+      .catch(() => undefined);
+    const onHash = () => sync();
     const onKey = (event: KeyboardEvent) => {
+      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         palette = !palette;
@@ -83,15 +111,25 @@
       }
       if (event.key === "Escape") {
         palette = false;
-        factId = null;
+        help = false;
+        more = false;
+        menu = false;
+        switcher = false;
+        proof.set(null);
         return;
       }
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      if (armed === "g") {
-        if (event.key === "p") go("projects");
-        if (event.key === "s") go("services");
-        if (event.key === "m") go("monitoring");
-        if (event.key === "l") go("logs");
+      if (typing) return;
+      if (event.key === "[") {
+        toggleNav();
+        return;
+      }
+      if (event.key === "?") {
+        help = !help;
+        return;
+      }
+      const target = letters[event.key];
+      if (armed === "g" && target) {
+        go(target);
         armed = "";
         return;
       }
@@ -102,7 +140,6 @@
     return () => {
       window.removeEventListener("hashchange", onHash);
       window.removeEventListener("keydown", onKey);
-      clearTimeout(searchTimer);
     };
   });
 
@@ -110,166 +147,190 @@
     await api("/api/v1/auth/logout", { method: "POST" });
     await onsignedout();
   }
-
-  function openFact(id: number): void {
-    factId = id;
-  }
 </script>
 
-<div
-  class="grid h-full grid-cols-1 bg-void {navCollapsed
-    ? 'md:grid-cols-[56px_1fr]'
-    : 'md:grid-cols-[220px_1fr]'}"
->
-  <nav
-    class="flex gap-1 overflow-x-auto border-b border-graphite bg-carbon p-2 md:flex md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-3"
-    aria-label={copy(lang, "product")}
-  >
-    <div class="mb-2 hidden items-center justify-between gap-2 md:flex">
-      {#if !navCollapsed}
-        <p class="px-2 text-sm font-medium text-paper">{copy(lang, "product")}</p>
-      {/if}
-      <button
-        type="button"
-        class="rounded-md px-2 py-1 text-xs text-fog"
-        onclick={toggleNav}
-        title={navCollapsed ? copy(lang, "expandNav") : copy(lang, "collapseNav")}
-      >
-        {navCollapsed ? "»" : "«"}
-      </button>
-    </div>
-    {#each routes as id (id)}
-      <a
-        class="block shrink-0 rounded-md px-2 py-1.5 text-sm transition-colors {route === id
-          ? 'bg-obsidian text-accent'
-          : 'text-mist hover:text-paper'}"
-        href={`#/${id}`}
-        aria-current={route === id ? "page" : undefined}
-        title={copy(lang, id)}
-      >
-        {navCollapsed ? copy(lang, id).slice(0, 1) : copy(lang, id)}
+<a class="skip" href="#content">{copy(lang, "skipContent")}</a>
+<div class="shell {collapsed ? 'is-collapsed' : ''}">
+  <nav class="side" aria-label={copy(lang, "navLabel")}>
+    <p class="nav-label px-2 pb-2 text-sm font-medium text-paper">{copy(lang, "product")}</p>
+    {#each navRoutes as id (id)}
+      <a class="nav-item" href={`#/${id}`} aria-current={place.route === id ? "page" : undefined} title={copy(lang, id)}>
+        <Icon name={icons[id]} />
+        <span class="nav-label">{copy(lang, id)}</span>
+        {#if id === "network" && orphanPorts > 0}
+          <span class="badge">{orphanPorts}</span>
+        {/if}
       </a>
     {/each}
-  </nav>
-  <div class="flex min-w-0 flex-col {factId !== null ? 'pr-[360px]' : ''}">
-    <header class="flex flex-wrap items-center justify-between gap-2 border-b border-graphite px-4 py-3">
-      <p class="text-sm text-fog">
-        <span class="text-mist">{account.username}</span>
-        <span class="text-ash"> · {account.role}</span>
+    <div class="side-foot">
+      <p class="side-foot-text flex items-center gap-2 text-xs text-fog">
+        <span class="dot ok"></span>
+        <span class="truncate">{panel?.hostname || copy(lang, "serverName")}</span>
       </p>
-      <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="rounded-md border border-graphite px-3 py-1 text-sm text-fog"
-          onclick={() => (palette = true)}
-        >
-          {copy(lang, "palette")}
+      <button type="button" class="btn btn-ghost" onclick={toggleNav} title={collapsed ? copy(lang, "expand") : copy(lang, "collapse")}>
+        {collapsed ? "»" : copy(lang, "collapse")}
+      </button>
+    </div>
+  </nav>
+  <div class="workspace">
+    <header class="topbar">
+      <div class="relative">
+        <button type="button" class="btn btn-secondary w-full justify-between" onclick={() => (switcher = !switcher)}>
+          <span class="truncate">{currentApp ? currentApp.name : copy(lang, "allApps")}</span>
         </button>
-        <button type="button" class="text-sm text-fog" onclick={() => setLang(lang === "en" ? "ru" : "en")}>
-          {lang === "en" ? "RU" : "EN"}
+        {#if switcher}
+          <div class="menu mt-2 w-full">
+            <input class="mb-2 h-8 w-full rounded-md border border-smoke bg-void px-2 text-sm" placeholder={copy(lang, "switcherSearch")} bind:value={query} />
+            <button type="button" class="btn btn-ghost w-full justify-start" onclick={() => { selectedApp.set(""); switcher = false; }}>
+              {copy(lang, "allApps")}
+            </button>
+            {#each panel?.apps ?? [] as item (item.id)}
+              <button
+                type="button"
+                class="btn btn-ghost w-full justify-start"
+                onclick={() => {
+                  selectedApp.set(item.id);
+                  switcher = false;
+                  if (place.route === "overview") location.hash = `#/apps/${item.id}/summary`;
+                }}
+              >
+                {item.name}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <button type="button" class="search-btn btn btn-secondary hidden justify-start md:flex" onclick={() => (palette = true)}>
+        <Icon name="search" />
+        {copy(lang, "searchPlaceholder")}
+      </button>
+      <div class="flex items-center justify-end gap-2">
+        <button type="button" class="btn btn-ghost md:hidden" onclick={() => (palette = true)} aria-label={copy(lang, "search")}>
+          <Icon name="search" />
         </button>
-        <button type="button" class="text-sm text-fog" onclick={logout}>{copy(lang, "signOut")}</button>
+        <span class="hidden items-center gap-2 sm:inline-flex">
+          <span class="dot {$refreshedAt ? 'ok' : ''}"></span>
+          <span class="kicker">{copy(lang, "liveWord")}</span>
+        </span>
+        <div class="relative">
+          <button type="button" class="btn btn-ghost" onclick={() => (menu = !menu)} aria-label={copy(lang, "userMenu")}>
+            <Icon name="user" />
+          </button>
+          {#if menu}
+            <div class="menu right-0 mt-2">
+              <p class="px-2 py-1 text-sm text-paper">{account.username}</p>
+              <button type="button" class="btn btn-ghost w-full justify-start" onclick={() => setLang(lang === "ru" ? "en" : "ru")}>
+                {lang === "ru" ? "EN" : "RU"}
+              </button>
+              <button type="button" class="btn btn-ghost w-full justify-start" onclick={() => void logout()}>{copy(lang, "signOut")}</button>
+            </div>
+          {/if}
+        </div>
       </div>
     </header>
-    <main class="min-h-0 flex-1 overflow-auto p-6">
-      {#if route === "overview"}
-        <Overview {lang} canScan={account.role === "owner"} />
-      {:else if route === "projects"}
-        <Projects {lang} onopen={openFact} />
-      {:else if route === "services"}
-        <h1 class="mb-4 text-2xl text-paper">{copy(lang, "services")}</h1>
-        <Records
-          {lang}
-          path="/api/v1/services"
-          detail="/api/v1/services"
-          onopen={openFact}
-          canAct={account.role !== "viewer"}
-        />
-      {:else if route === "schedules"}
-        <h1 class="mb-4 text-2xl text-paper">{copy(lang, "schedules")}</h1>
-        <Records {lang} path="/api/v1/schedules" detail={null} onopen={openFact} />
-      {:else if route === "containers"}
-        <h1 class="mb-4 text-2xl text-paper">{copy(lang, "containers")}</h1>
-        <Records
-          {lang}
-          path="/api/v1/containers"
-          detail="/api/v1/containers"
-          onopen={openFact}
-          canAct={account.role !== "viewer"}
-        />
-      {:else if route === "network"}
-        <h1 class="mb-4 text-2xl text-paper">{copy(lang, "network")}</h1>
-        <Records {lang} path="/api/v1/ports" detail={null} onopen={openFact} />
-      {:else if route === "users"}
-        <h1 class="mb-4 text-2xl text-paper">{copy(lang, "users")}</h1>
-        <Records {lang} path="/api/v1/users" detail="/api/v1/users" onopen={openFact} />
-      {:else if route === "monitoring"}
-        <Monitor {lang} />
-      {:else if route === "logs"}
-        <Logs {lang} />
-      {:else if route === "changes"}
-        <Changes {lang} />
-      {:else if route === "audit"}
-        <Audit {lang} />
-      {:else if route === "settings"}
-        <Settings {lang} role={account.role} />
-      {:else}
-        <section>
-          <h1 class="mb-4 text-2xl text-paper">{copy(lang, route)}</h1>
-          <p class="max-w-xl text-sm text-fog">{copy(lang, "readOnly")}</p>
-        </section>
-      {/if}
+    <main id="content" class="canvas">
+      <div class="canvas-inner">
+        {#key `${place.route}:${place.appId}:${place.tab}:${lang}`}
+          <div class="atlas-fade-in">
+            {#if place.route === "overview"}
+              <Overview {lang} canScan={account.role === "owner"} />
+            {:else if place.route === "apps"}
+              <Apps {lang} appId={place.appId} tab={place.tab} role={account.role} />
+            {:else if place.route === "monitoring"}
+              <Monitor {lang} />
+            {:else if place.route === "network"}
+              <Network {lang} />
+            {:else if place.route === "access"}
+              <Access {lang} />
+            {:else if place.route === "logs"}
+              <Logs {lang} />
+            {:else if place.route === "events"}
+              <Events {lang} />
+            {:else if place.route === "settings"}
+              <Settings {lang} role={account.role} onlang={setLang} />
+            {:else}
+              <System {lang} tab={place.tab} />
+            {/if}
+          </div>
+        {/key}
+      </div>
     </main>
   </div>
 </div>
 
-{#if factId !== null}
-  <EvidenceDrawer {factId} {lang} onclose={() => (factId = null)} />
+<nav class="tabbar" aria-label={copy(lang, "navLabel")}>
+  {#each phoneNav as id (id)}
+    <a href={`#/${id}`} aria-current={place.route === id ? "page" : undefined}>
+      <Icon name={icons[id]} />
+      {copy(lang, id)}
+    </a>
+  {/each}
+  <button type="button" class="text-fog" onclick={() => (more = !more)}>
+    <Icon name="more" />
+    {copy(lang, "navMore")}
+    {#if orphanPorts > 0}<span class="badge">{orphanPorts}</span>{/if}
+  </button>
+</nav>
+
+{#if more}
+  <div class="drawer" role="dialog" aria-label={copy(lang, "moreSheet")}>
+    {#each ["access", "logs", "events", "settings", "system"] as id (id)}
+      <a class="nav-item" href={id === "system" ? "#/system/services" : `#/${id}`} onclick={() => (more = false)}>
+        {copy(lang, id as RouteId)}
+      </a>
+    {/each}
+  </div>
 {/if}
 
 {#if palette}
-  <div
-    class="atlas-backdrop-in fixed inset-0 z-30 grid place-items-start bg-void/80 pt-24"
-    role="dialog"
-    aria-modal="true"
-    aria-label={copy(lang, "palette")}
-  >
-    <div class="atlas-fade-in mx-auto w-full max-w-lg rounded-xl border border-graphite bg-obsidian p-3">
-      <input
-        class="w-full rounded-md border border-graphite bg-void px-3 py-2 text-paper"
-        bind:value={query}
-        placeholder={copy(lang, "search")}
-      />
-      <ul class="mt-2">
-        {#each visible as id (id)}
-          <li>
-            <button
-              type="button"
-              class="w-full rounded-md px-2 py-1.5 text-left text-mist hover:bg-graphite"
-              onclick={() => go(id)}
-            >
-              {copy(lang, id)}
-            </button>
-          </li>
-        {/each}
-      </ul>
-      {#if hits.length > 0}
-        <p class="mt-3 px-2 text-xs text-fog">{copy(lang, "search")}</p>
-        <ul class="mt-1">
-          {#each hits as hit (`${hit.path}:${hit.excerpt}`)}
-            <li>
-              <button
-                type="button"
-                class="w-full rounded-md px-2 py-1.5 text-left text-sm text-mist hover:bg-graphite"
-                onclick={() => go(hit.project_id ? "projects" : "overview")}
-              >
-                <span class="font-mono text-xs text-fog">{hit.path}</span>
-                <span class="mt-0.5 block truncate text-mist">{hit.excerpt}</span>
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+  <div class="atlas-backdrop-in fixed inset-0 z-30 grid place-items-start bg-void/80 px-4 pt-24" role="dialog" aria-modal="true" aria-label={copy(lang, "search")}>
+    <div class="card mx-auto w-full max-w-lg">
+      <input class="h-10 w-full rounded-md border border-smoke bg-void px-3" bind:value={query} placeholder={copy(lang, "searchPlaceholder")} />
+      <p class="kicker mt-3">{copy(lang, "navLabel")}</p>
+      {#each navRoutes.filter((id) => copy(lang, id).toLowerCase().includes(query.toLowerCase())) as id (id)}
+        <button type="button" class="btn btn-ghost w-full justify-start" onclick={() => go(id)}>{copy(lang, id)}</button>
+      {/each}
+      <p class="kicker mt-3">{copy(lang, "apps")}</p>
+      {#each foundApps.slice(0, 6) as item (item.id)}
+        <button type="button" class="btn btn-ghost w-full justify-start" onclick={() => { location.hash = `#/apps/${item.id}/summary`; palette = false; }}>
+          {item.name}
+        </button>
+      {/each}
     </div>
   </div>
 {/if}
+
+{#if help}
+  <div class="atlas-backdrop-in fixed inset-0 z-30 grid place-items-center bg-void/80 p-4" role="dialog" aria-modal="true" aria-label={copy(lang, "shortcuts")}>
+    <div class="card w-full max-w-md">
+      <h2 class="block-title mb-3">{copy(lang, "shortcuts")}</h2>
+      <ul class="space-y-2 text-sm">
+        <li>Ctrl+K · {copy(lang, "search")}</li>
+        <li>[ · {copy(lang, "collapse")}</li>
+        <li>g {copy(lang, "press")} o · {copy(lang, "overview")}</li>
+        <li>g {copy(lang, "press")} l · {copy(lang, "logs")}</li>
+        <li>? · {copy(lang, "helpKeys")}</li>
+      </ul>
+      <button type="button" class="btn btn-secondary mt-4" onclick={() => (help = false)}>{copy(lang, "close")}</button>
+    </div>
+  </div>
+{/if}
+
+{#if $proof}
+  <div class="drawer" role="dialog" aria-modal="true" aria-label={copy(lang, "showProof")}>
+    <div class="mb-4 flex items-center justify-between">
+      <h2 class="block-title">{copy(lang, "showProof")}</h2>
+      <button type="button" class="btn btn-ghost" onclick={() => proof.set(null)}>{copy(lang, "close")}</button>
+    </div>
+    <p class="kicker">{copy(lang, "whatShown")}</p>
+    <p class="mt-1 text-paper">{$proof.value}</p>
+    <p class="kicker mt-4">{copy(lang, "howKnown")}</p>
+    <p class="mono mt-1 break-all">{$proof.how}</p>
+    <p class="kicker mt-4">{copy(lang, "howSure")}</p>
+    <p class="mt-1">
+      {copy(lang, $proof.kind === "fact" ? "proofKindFact" : $proof.kind === "derived" ? "proofKindDerived" : "proofKindUnknown")}
+    </p>
+    {#if $proof.at}<p class="kicker mt-3">{copy(lang, "collected")} {$proof.at}</p>{/if}
+  </div>
+{/if}
+

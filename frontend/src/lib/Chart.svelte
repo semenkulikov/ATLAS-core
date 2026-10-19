@@ -4,7 +4,13 @@
   import { api, shownError } from "./api";
   import { copy, metricMeta, type Lang } from "./i18n";
 
-  let { lang, name, seconds }: { lang: Lang; name: string; seconds: number } = $props();
+  let {
+    lang,
+    name,
+    seconds,
+    title = "",
+    mode = "raw",
+  }: { lang: Lang; name: string; seconds: number; title?: string; mode?: "raw" | "busy" | "rate" } = $props();
   let holder = $state<HTMLDivElement | null>(null);
   let message = $state("");
   let chart: uPlot | null = null;
@@ -35,21 +41,32 @@
           return;
         }
         message = "";
-        const values = scaleValues(payload.points);
+        const raw = scaleValues(payload.points);
+        const values =
+          mode === "busy"
+            ? raw.map((value) => Math.max(0, Math.min(100, 100 - value)))
+            : mode === "rate"
+              ? raw.map((value, index) => {
+                  if (index === 0) return 0;
+                  const dt = payload.points[index].ts - payload.points[index - 1].ts;
+                  if (dt <= 0) return 0;
+                  return Math.max(0, (value - raw[index - 1]) / dt);
+                })
+              : raw;
+        const unit = mode === "busy" ? "%" : mode === "rate" ? "" : meta.unit;
         chart = new uPlot(
           {
             width: holder.clientWidth || 640,
-            height: 160,
-            series: [{}, { label: meta.title, stroke: "#02b8cc", width: 1.5 }],
+            height: 180,
+            series: [{}, { label: title || meta.title, stroke: "#02b8cc", width: 1.5 }],
             axes: [
               { stroke: "#8a8f98", grid: { stroke: "#23252a" } },
               {
                 stroke: "#8a8f98",
                 grid: { stroke: "#23252a" },
+                size: 56,
                 values: (_u, splits) =>
-                  splits.map((value) =>
-                    meta.unit ? `${Math.round(value)}${meta.unit === "%" ? "%" : ""}` : String(value),
-                  ),
+                  splits.map((value) => (unit === "%" ? `${Math.round(value)}%` : String(Math.round(value)))),
               },
             ],
             cursor: { sync: { key: "atlas-host" }, drag: { x: true, y: false } },
@@ -72,7 +89,7 @@
 
 <div class="atlas-fade-in mb-4">
   <div class="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-    <p class="text-sm text-paper">{meta.title}</p>
+    <p class="text-sm text-paper">{title || meta.title}</p>
     {#if meta.unit}
       <p class="text-xs text-ash">{meta.unit}</p>
     {/if}

@@ -28,7 +28,9 @@
 </script>
 
 {#if phase === "loading"}
-  <p class="p-8 text-fog">…</p>
+  <main class="grid min-h-full place-items-center bg-void">
+    <div class="skeleton h-64 w-full max-w-md" aria-hidden="true"></div>
+  </main>
 {:else if phase === "anon" || account === null}
   <Auth {message} onready={refresh} />
 {:else}

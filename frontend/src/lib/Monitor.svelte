@@ -3,49 +3,39 @@
   import "uplot/dist/uPlot.min.css";
   import Chart from "./Chart.svelte";
   import { api, errorDetail, shownError } from "./api";
-  import { copy, groupLabel, metricMeta, type Lang } from "./i18n";
-  import Accordion from "./ui/Accordion.svelte";
+  import { formatBytes } from "./format";
+  import { copy, type Lang } from "./i18n";
+  import { loadPanel, type PanelData } from "./inventory";
+  import { selectedApp } from "./selection";
   import ErrorModal from "./ui/ErrorModal.svelte";
   import LiveBadge from "./ui/LiveBadge.svelte";
 
   let { lang }: { lang: Lang } = $props();
   let range = $state(3600);
   let names = $state<string[]>([]);
-  let live = $state<{
-    loadavg: [number, number, number] | null;
-    memory_available: number | null;
-    cpu_idle: number | null;
-    units: { name: string; memory_bytes: number | null }[];
-  } | null>(null);
-  let liveKey = $state(0);
-  let connected = $state(false);
-  let moreOpen = $state(false);
+  let live = $state(false);
+  let data = $state<PanelData | null>(null);
   let errorMessage = $state("");
   let errorExtra = $state("");
   let socket: WebSocket | null = null;
+  let units = $state<{ name: string; memory_bytes: number | null }[]>([]);
+
   const presets = [
-    [300, "5m"],
-    [3600, "1h"],
-    [86400, "24h"],
-    [604800, "7d"],
-    [2592000, "30d"],
+    [900, "period15"],
+    [3600, "periodHour"],
+    [86400, "periodDay"],
+    [604800, "periodWeek"],
   ] as const;
 
-  const hostSeries = $derived(
-    names.filter((name) => metricMeta(lang, name).group === "host"),
-  );
-  const extraSeries = $derived(
-    names.filter((name) => metricMeta(lang, name).group !== "host"),
-  );
-  const extrasByGroup = $derived.by(() => {
-    const groups = new Map<string, string[]>();
-    for (const name of extraSeries) {
-      const group = metricMeta(lang, name).group;
-      const list = groups.get(group) ?? [];
-      list.push(name);
-      groups.set(group, list);
-    }
-    return [...groups.entries()];
+  const diskName = $derived(names.find((name) => name.includes(".read_bytes")) ?? "");
+  const netName = $derived(names.find((name) => name.includes(".rx_bytes")) ?? "");
+  const filteredUnits = $derived.by(() => {
+    const id = $selectedApp;
+    if (!id || !data) return units;
+    const app = data.apps.find((item) => item.id === id);
+    if (!app) return units;
+    const keys = new Set([...app.services.map((row) => row.key), ...app.containers.map((row) => String(row.payload.name))]);
+    return units.filter((unit) => keys.has(unit.name));
   });
 
   onMount(() => {
@@ -57,32 +47,28 @@
         errorMessage = shownError(error, lang);
         errorExtra = errorDetail(error);
       });
+    void loadPanel()
+      .then((body) => {
+        data = body;
+      })
+      .catch(() => undefined);
     const protocol = location.protocol === "https:" ? "wss" : "ws";
     socket = new WebSocket(`${protocol}://${location.host}/api/v1/stream`);
     socket.addEventListener("open", () => {
-      connected = true;
+      live = true;
       socket?.send(JSON.stringify({ subscribe: "metrics.live" }));
     });
     socket.addEventListener("close", () => {
-      connected = false;
+      live = false;
     });
     socket.addEventListener("message", (event) => {
       try {
         const body = JSON.parse(String(event.data)) as {
           channel?: string;
-          loadavg?: [number, number, number] | null;
-          memory_available?: number | null;
-          cpu_idle?: number | null;
           units?: { name: string; memory_bytes: number | null }[];
         };
         if (body.channel !== "metrics.live") return;
-        live = {
-          loadavg: body.loadavg ?? null,
-          memory_available: body.memory_available ?? null,
-          cpu_idle: body.cpu_idle ?? null,
-          units: body.units ?? [],
-        };
-        liveKey += 1;
+        units = body.units ?? [];
       } catch {
         return;
       }
@@ -95,85 +81,66 @@
   });
 </script>
 
-<section>
+<section class="atlas-fade-in">
   <div class="mb-4 flex flex-wrap items-center gap-3">
-    <h1 class="text-2xl text-paper">{copy(lang, "monitoring")}</h1>
-    <LiveBadge {lang} on={connected} />
+    <h1 class="screen-title">{copy(lang, "monitoring")}</h1>
+    <LiveBadge {lang} on={live} />
   </div>
-
-  {#if live}
-    <div
-      class="atlas-tick mb-4 grid gap-2 rounded-xl border border-graphite bg-carbon p-3 text-sm text-mist md:grid-cols-3"
-      data-tick={liveKey}
-    >
-      <p>
-        {copy(lang, "loadAvg")}
-        <span class="mt-1 block font-mono text-paper">
-          {live.loadavg ? live.loadavg.map((value) => value.toFixed(2)).join(" ") : "—"}
-        </span>
-      </p>
-      <p>
-        {copy(lang, "memAvailable")}
-        <span class="mt-1 block font-mono text-paper">
-          {live.memory_available === null ? "—" : `${Math.round(live.memory_available / 1048576)} MiB`}
-        </span>
-      </p>
-      <p>
-        {copy(lang, "cpuIdle")}
-        <span class="mt-1 block font-mono text-paper">
-          {live.cpu_idle === null ? "—" : `${live.cpu_idle.toFixed(0)}%`}
-        </span>
-      </p>
-      {#each live.units as unit (unit.name)}
-        <p class="text-xs text-fog">
-          <span class="text-ash">{copy(lang, "unitMemory")}</span>
-          <span class="mt-0.5 block font-mono">{unit.name}</span>
-          {unit.memory_bytes === null ? "" : `${Math.round(unit.memory_bytes / 1048576)} MiB`}
-        </p>
-      {/each}
-    </div>
+  {#if $selectedApp}
+    <p class="chip mb-4">
+      {copy(lang, "appFilter")}: {data?.apps.find((item) => item.id === $selectedApp)?.name}
+      <button type="button" class="ml-2" onclick={() => selectedApp.set("")}>{copy(lang, "clearApp")}</button>
+    </p>
   {/if}
-
-  <div class="mb-3 flex gap-2">
-    {#each presets as [seconds, label] (seconds)}
-      <button
-        type="button"
-        class="rounded-md px-2 py-1 text-sm {range === seconds ? 'text-accent' : 'text-fog'}"
-        onclick={() => (range = seconds)}
-      >
-        {label}
+  <div class="seg mb-4">
+    {#each presets as [seconds, key] (seconds)}
+      <button type="button" class="btn btn-ghost" aria-pressed={range === seconds} onclick={() => (range = seconds)}>
+        {copy(lang, key)}
       </button>
     {/each}
   </div>
-
-  {#if names.length === 0 && !errorMessage}
-    <p class="text-sm text-fog">{copy(lang, "empty")}</p>
-  {/if}
-
-  {#each hostSeries as name (name)}
-    <Chart {lang} {name} seconds={range} />
-  {/each}
-
-  {#if extrasByGroup.length > 0}
-    <Accordion title={copy(lang, "chartsMore")} count={extraSeries.length} bind:open={moreOpen}>
-      {#each extrasByGroup as [group, series] (group)}
-        <h2 class="mb-2 mt-3 px-2 text-xs uppercase tracking-wide text-ash">{groupLabel(lang, group)}</h2>
-        {#each series as name (name)}
-          <Chart {lang} {name} seconds={range} />
+  <div class="grid gap-4 lg:grid-cols-2">
+    {#if names.includes("host.cpu.idle")}
+      <div class="card"><Chart {lang} name="host.cpu.idle" seconds={range} title={copy(lang, "chartCpu")} mode="busy" /></div>
+    {/if}
+    {#if names.includes("host.memory.available_bytes")}
+      <div class="card"><Chart {lang} name="host.memory.available_bytes" seconds={range} title={copy(lang, "chartMem")} /></div>
+    {/if}
+    {#if diskName}
+      <div class="card"><Chart {lang} name={diskName} seconds={range} title={copy(lang, "chartDisk")} mode="rate" /></div>
+    {/if}
+    {#if netName}
+      <div class="card"><Chart {lang} name={netName} seconds={range} title={copy(lang, "chartNet")} mode="rate" /></div>
+    {/if}
+    {#if names.includes("host.load.1")}
+      <div class="card"><Chart {lang} name="host.load.1" seconds={range} title={copy(lang, "chartLoad")} /></div>
+    {/if}
+  </div>
+  <h2 class="block-title mb-3 mt-6">{copy(lang, "whoUses")}</h2>
+  <div class="card overflow-auto p-0">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>{copy(lang, "apps")}</th>
+          <th>{copy(lang, "cpu")}</th>
+          <th>{copy(lang, "memory")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each filteredUnits as unit (unit.name)}
+          <tr>
+            <td class="mono">{unit.name}</td>
+            <td>— <span class="kicker">{copy(lang, "cpuUnknown")}</span></td>
+            <td>{unit.memory_bytes === null ? "—" : formatBytes(unit.memory_bytes, lang)}</td>
+          </tr>
+        {:else}
+          <tr><td colspan="3" class="text-fog">{copy(lang, "empty")}</td></tr>
         {/each}
-      {/each}
-    </Accordion>
-  {/if}
+      </tbody>
+    </table>
+  </div>
 </section>
 
 {#if errorMessage}
-  <ErrorModal
-    {lang}
-    message={errorMessage}
-    detail={errorExtra}
-    onclose={() => {
-      errorMessage = "";
-      errorExtra = "";
-    }}
-  />
+  <ErrorModal {lang} message={errorMessage} detail={errorExtra} onclose={() => (errorMessage = "")} />
 {/if}

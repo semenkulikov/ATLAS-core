@@ -49,6 +49,20 @@ function csrfToken(): string {
   return row ? decodeURIComponent(row.slice("atlas_csrf=".length)) : "";
 }
 
+export async function loadAll(path: string): Promise<Entity[]> {
+  const items: Entity[] = [];
+  let cursor = "";
+  for (let page = 0; page < 30; page += 1) {
+    const params = new URLSearchParams({ limit: "200" });
+    if (cursor) params.set("cursor", cursor);
+    const body = await api<{ items: Entity[]; next: string | null }>(`${path}?${params.toString()}`);
+    items.push(...body.items);
+    if (!body.next) break;
+    cursor = body.next;
+  }
+  return items;
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const method = (init.method ?? "GET").toUpperCase();

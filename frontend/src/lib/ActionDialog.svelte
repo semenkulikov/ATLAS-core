@@ -9,20 +9,34 @@
     op,
     objectName,
     risk,
+    note = "",
     onclose,
   }: {
     lang: Lang;
     op: string;
     objectName: string;
     risk: "medium" | "high" | "critical";
+    note?: string;
     onclose: () => void;
   } = $props();
 
   let confirm = $state("");
+  let wait = $state(0);
+  let cancelButton = $state<HTMLButtonElement | null>(null);
   let code = $state("");
   let done = $state("");
   let errorMessage = $state("");
   let errorExtra = $state("");
+
+  $effect(() => {
+    cancelButton?.focus();
+    if (!op.startsWith("host.")) return;
+    wait = 3;
+    const timer = setInterval(() => {
+      wait = Math.max(0, wait - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  });
 
   async function submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
@@ -52,7 +66,8 @@
 
 <Modal {lang} title={actionTitle(lang, op)} {onclose} danger>
   <form onsubmit={submit}>
-    <p class="mb-4 font-mono text-sm text-fog">{objectName}</p>
+    <p class="mb-2 text-sm text-paper">{objectName}</p>
+    {#if note}<p class="mb-4 text-sm text-fog">{note}</p>{/if}
     <label class="mb-3 block text-sm text-fog">
       {copy(lang, "typeToConfirm")}
       <input
@@ -71,14 +86,11 @@
       </label>
     {/if}
     {#if done}<p class="mb-3 text-sm text-ok" role="status">{done}</p>{/if}
-    <div class="flex gap-3">
-      <button
-        type="submit"
-        class="rounded-md border border-crit bg-obsidian px-3 py-1.5 text-sm text-paper"
-      >
-        {copy(lang, "confirm")}
+    <div class="flex flex-wrap gap-3">
+      <button type="button" class="btn btn-secondary" bind:this={cancelButton} onclick={onclose}>{copy(lang, "cancel")}</button>
+      <button type="submit" class="btn btn-danger" disabled={wait > 0}>
+        {wait > 0 ? `${copy(lang, "countdown")} ${wait}` : copy(lang, "confirm")}
       </button>
-      <button type="button" class="text-sm text-fog" onclick={onclose}>{copy(lang, "close")}</button>
     </div>
   </form>
 </Modal>

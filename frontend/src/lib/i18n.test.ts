@@ -11,7 +11,9 @@ describe("panel copy", () => {
 
   it("falls back to the overview for an unknown hash", () => {
     expect(routeFromHash("")).toBe("overview");
-    expect(routeFromHash("#/projects")).toBe("projects");
+    expect(routeFromHash("#/projects")).toBe("apps");
+    expect(routeFromHash("#/users")).toBe("access");
+    expect(routeFromHash("#/audit")).toBe("events");
     expect(routeFromHash("#/missing")).toBe("overview");
     expect(routes).toContain("settings");
   });

@@ -3,43 +3,51 @@
   import ActionDialog from "./ActionDialog.svelte";
   import { api } from "./api";
   import { copy, type Lang } from "./i18n";
+  import { loadPanel, type PanelData } from "./inventory";
 
-  let { lang, role }: { lang: Lang; role: string } = $props();
+  let { lang, role, onlang }: { lang: Lang; role: string; onlang: (next: Lang) => void } = $props();
+  let tab = $state("server");
   let enabled = $state(false);
   let hostname = $state("");
-  let risks = $state<{ kind: string; name: string; enabled: string }[]>([]);
-  let channels = $state<{ id: number; kind: string; enabled: boolean }[]>([]);
-  let failed = $state(false);
-  let reboot = $state(false);
+  let risks = $state<{ kind: string; name: string }[]>([]);
+  let channels = $state<{ id: number; kind: string; enabled: boolean; target?: string }[]>([]);
   let kind = $state("webhook");
   let target = $state("");
   let turnOn = $state(false);
   let note = $state("");
+  let showTarget = $state(false);
+  let raw = $state(localStorage.getItem("atlas.raw") === "1");
+  let data = $state<PanelData | null>(null);
+  let reboot = $state<string | null>(null);
+
+  const tabs = [
+    ["server", "tabServer"],
+    ["panel", "tabPanel"],
+    ["alerts", "tabAlerts"],
+    ["about", "tabAbout"],
+  ] as const;
 
   function reloadChannels(): void {
-    void api<{ channels: { id: number; kind: string; enabled: boolean }[] }>("/api/v1/alerts")
+    void api<{ channels: { id: number; kind: string; enabled: boolean; target?: string }[] }>("/api/v1/alerts")
       .then((body) => {
         channels = body.channels;
       })
-      .catch(() => {
-        failed = true;
-      });
+      .catch(() => undefined);
   }
 
   onMount(() => {
-    void api<{
-      enabled: boolean;
-      hostname: string;
-      risks: { kind: string; name: string; enabled: string }[];
-    }>("/api/v1/control")
+    const place = location.hash.split("/")[2];
+    if (place === "panel" || place === "alerts" || place === "about" || place === "server") tab = place;
+    void api<{ enabled: boolean; hostname: string; risks: { kind: string; name: string }[] }>("/api/v1/control")
       .then((body) => {
         enabled = body.enabled;
         hostname = body.hostname;
         risks = body.risks;
       })
-      .catch(() => {
-        failed = true;
-      });
+      .catch(() => undefined);
+    void loadPanel().then((body) => {
+      data = body;
+    }).catch(() => undefined);
     reloadChannels();
   });
 
@@ -53,77 +61,112 @@
       });
       target = "";
       turnOn = false;
-      note = copy(lang, "channelSaved");
+      note = copy(lang, "saved");
       reloadChannels();
     } catch {
       note = copy(lang, "error");
     }
   }
+
+  function toggleRaw(): void {
+    raw = !raw;
+    localStorage.setItem("atlas.raw", raw ? "1" : "0");
+    note = copy(lang, "saved");
+  }
+
+  const riskNote = $derived(
+    risks.length
+      ? `${copy(lang, "wontReturn")}: ${risks.map((risk) => risk.name).join(", ")}`
+      : copy(lang, "noneRisk"),
+  );
 </script>
 
-<section>
-  <h1 class="mb-4 text-2xl text-paper">{copy(lang, "settings")}</h1>
-  {#if failed}
-    <p class="text-sm text-fog">{copy(lang, "error")}</p>
-  {:else}
-    <p class="max-w-xl text-sm text-fog">{enabled ? copy(lang, "controlOn") : copy(lang, "readOnly")}</p>
-    <h2 class="mt-8 mb-3 text-sm text-mist">{copy(lang, "risks")}</h2>
-    {#if risks.length === 0}
-      <p class="text-sm text-fog">{copy(lang, "empty")}</p>
-    {:else}
-      <ul class="space-y-2">
-        {#each risks as risk (`${risk.kind}:${risk.name}`)}
-          <li class="font-mono text-sm text-paper">{risk.kind} {risk.name}</li>
-        {/each}
-      </ul>
-    {/if}
-    <h2 class="mt-8 mb-3 text-sm text-mist">{copy(lang, "alerts")}</h2>
+<section class="atlas-fade-in">
+  <h1 class="screen-title mb-4">{copy(lang, "settings")}</h1>
+  <div class="mb-4 flex gap-2 overflow-x-auto">
+    {#each tabs as [id, key] (id)}
+      <a class="chip whitespace-nowrap" href={`#/settings/${id}`} aria-current={tab === id ? "page" : undefined} onclick={() => (tab = id)}>
+        {copy(lang, key)}
+      </a>
+    {/each}
+  </div>
+  {#if note}<p class="kicker mb-3" role="status">{note}</p>{/if}
+
+  {#if tab === "server"}
+    <div class="card mb-4">
+      <p class="kicker">{copy(lang, "displayName")}</p>
+      <p class="mt-1 text-paper">{data?.hostname || hostname || "—"}</p>
+      <p class="kicker mt-3">{copy(lang, "timezoneLabel")}</p>
+      <p class="mt-1">{data?.timezone || copy(lang, "notSet")}</p>
+    </div>
+    <section class="card">
+      <h2 class="block-title">{copy(lang, "dangerZone")}</h2>
+      <p class="mt-2 text-sm text-fog">{copy(lang, "powerHint")}</p>
+      <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+        <button type="button" class="btn btn-danger" disabled={role === "viewer" || !enabled} onclick={() => (reboot = "host.reboot")}>{copy(lang, "rebootHost")}</button>
+        <button type="button" class="btn btn-danger" disabled={role === "viewer" || !enabled} onclick={() => (reboot = "host.poweroff")}>{copy(lang, "powerOff")}</button>
+      </div>
+      {#if !enabled}<p class="kicker mt-3">{copy(lang, "readOnly")}</p>{/if}
+    </section>
+  {:else if tab === "panel"}
+    <div class="card grid gap-3">
+      <p><span class="kicker">{copy(lang, "role")}</span> <span class="text-paper">{role}</span></p>
+      <p><span class="kicker">{copy(lang, "twoFactor")}</span> {copy(lang, "twoFactorOn")}</p>
+      <p class="text-sm text-fog">{copy(lang, "allowedAddr")}</p>
+    </div>
+  {:else if tab === "alerts"}
+    <p class="mb-3 text-sm text-fog">{copy(lang, "channelLater")}</p>
     {#if channels.length === 0}
-      <p class="max-w-xl text-sm text-fog">{copy(lang, "channelsOff")}</p>
+      <p class="card mb-4">{copy(lang, "emptyChannel")}</p>
     {:else}
-      <ul class="mb-4 space-y-2">
+      <ul class="card mb-4">
         {#each channels as channel (channel.id)}
-          <li class="font-mono text-sm text-paper">
-            {channel.kind} {channel.enabled ? copy(lang, "on") : copy(lang, "off")}
+          <li class="flex items-center justify-between py-2">
+            <span>{channel.kind}</span>
+            <span class="mono text-fog">{showTarget ? (channel.target ?? "") : copy(lang, "webhookMask")}</span>
           </li>
         {/each}
       </ul>
+      <button type="button" class="btn btn-ghost mb-4" onclick={() => (showTarget = !showTarget)}>{showTarget ? copy(lang, "hideSecret") : copy(lang, "showSecret")}</button>
     {/if}
-    {#if role === "owner"}
-      <form class="mt-4 flex max-w-xl flex-col gap-3" onsubmit={saveChannel}>
-        <label class="text-sm text-fog">
-          {copy(lang, "channelKind")}
-          <select class="mt-1 w-full rounded-md border border-graphite bg-void px-3 py-2 text-paper" bind:value={kind}>
-            <option value="webhook">webhook</option>
-            <option value="telegram">telegram</option>
-          </select>
-        </label>
-        <label class="text-sm text-fog">
-          {copy(lang, "channelTarget")}
-          <input
-            class="mt-1 w-full rounded-md border border-graphite bg-void px-3 py-2 font-mono text-sm text-paper"
-            bind:value={target}
-            placeholder={kind === "telegram" ? "bot-token chat-id" : "https://hooks.example/path"}
-          />
-        </label>
-        <label class="flex items-center gap-2 text-sm text-fog">
-          <input type="checkbox" bind:checked={turnOn} />
-          {copy(lang, "channelEnable")}
-        </label>
-        <button class="self-start rounded-md bg-accent px-3 py-2 text-void" type="submit">{copy(lang, "save")}</button>
-        {#if note}
-          <p class="text-sm text-fog" role="status">{note}</p>
-        {/if}
-      </form>
-    {/if}
-    {#if role === "owner" && enabled && hostname}
-      <button type="button" class="mt-8 rounded-md border border-crit px-3 py-1.5 text-sm text-paper" onclick={() => (reboot = true)}>
-        {copy(lang, "opReboot")}
-      </button>
-    {/if}
+    <form class="card grid gap-3" onsubmit={saveChannel}>
+      <label class="text-sm text-fog">{copy(lang, "channelKind")}
+        <input class="mt-1 block h-8 w-full rounded-md border border-smoke bg-void px-3" bind:value={kind} />
+      </label>
+      <label class="text-sm text-fog">{copy(lang, "channelTarget")}
+        <input class="mt-1 block h-8 w-full rounded-md border border-smoke bg-void px-3" bind:value={target} />
+      </label>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={turnOn} /> {copy(lang, "channelEnable")}</label>
+      <button class="btn btn-accent w-fit" type="submit">{copy(lang, "save")}</button>
+    </form>
+  {:else}
+    <div class="card grid gap-3">
+      <p><span class="kicker">{copy(lang, "panelVersion")}</span> {copy(lang, "versionUnknown")}</p>
+      <p class="text-sm text-fog">{copy(lang, "signatureHint")}</p>
+      <label class="text-sm text-fog">{copy(lang, "languageLabel")}
+        <select class="mt-1 block h-8 rounded-md border border-smoke bg-void px-2" value={lang} onchange={(event) => onlang((event.currentTarget as HTMLSelectElement).value === "en" ? "en" : "ru")}>
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={raw} onchange={toggleRaw} />
+        {copy(lang, "showRaw")}
+      </label>
+      <p class="kicker">{copy(lang, "rawHint")}</p>
+      <p><span class="kicker">{copy(lang, "sourcesCount")}</span> {data?.sourceCount ?? "—"}</p>
+      <a class="text-sm text-info" href="#/system/services">{copy(lang, "systemServices")}</a>
+    </div>
   {/if}
 </section>
 
-{#if reboot && hostname}
-  <ActionDialog {lang} op="host.reboot" objectName={hostname} risk="critical" onclose={() => (reboot = false)} />
+{#if reboot}
+  <ActionDialog
+    {lang}
+    op={reboot}
+    objectName={hostname || data?.hostname || ""}
+    risk="critical"
+    note={riskNote}
+    onclose={() => (reboot = null)}
+  />
 {/if}

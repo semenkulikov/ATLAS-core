@@ -4,7 +4,7 @@
   import { copy, type Lang } from "./i18n";
 
   let { message = "", onready }: { message?: string; onready: () => Promise<void> } = $props();
-  let lang = $state<Lang>("en");
+  let lang = $state<Lang>(localStorage.getItem("atlas.lang") === "en" ? "en" : "ru");
   let mode = $state<"login" | "enroll" | "confirm">("login");
   let username = $state("");
   let password = $state("");

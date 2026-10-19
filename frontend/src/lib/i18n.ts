@@ -1,19 +1,19 @@
 /** Screen ids and the two dictionaries. Keys match across languages. */
 
-export const routes = [
+import { phrases } from "./phrases";
+
+export const navRoutes = [
   "overview",
-  "projects",
-  "services",
-  "schedules",
-  "containers",
-  "network",
-  "users",
+  "apps",
   "monitoring",
+  "network",
+  "access",
   "logs",
-  "changes",
-  "audit",
+  "events",
   "settings",
 ] as const;
+
+export const routes = [...navRoutes, "system"] as const;
 
 export type RouteId = (typeof routes)[number];
 
@@ -169,7 +169,8 @@ const en = {
   errActionFailed: "The action did not complete.",
   errActionConfirm: "Confirmation text did not match.",
   errScanFailed: "The scan did not finish.",
-  errLogsSource: "That log source could not be read.",
+  errLogsSource:
+    "Could not read the journal. The panel user is not allowed to. Add the panel user to the systemd-journal group.",
   errMetricsQuery: "Could not load that chart.",
   errHttpLimit: "Invalid page size.",
   changeAdded: "Added",
@@ -329,7 +330,8 @@ const ru: typeof en = {
   errActionFailed: "Действие не выполнено.",
   errActionConfirm: "Текст подтверждения не совпал.",
   errScanFailed: "Скан не завершился.",
-  errLogsSource: "Не удалось прочитать этот источник логов.",
+  errLogsSource:
+    "Не удалось прочитать журнал. У панели нет прав на чтение. Добавьте пользователя панели в группу systemd-journal.",
   errMetricsQuery: "Не удалось загрузить график.",
   errHttpLimit: "Неверный размер страницы.",
   changeAdded: "Добавлено",
@@ -337,19 +339,72 @@ const ru: typeof en = {
   changeChanged: "Изменено",
 };
 
-const dictionaries = { en, ru };
+const enFull = { ...en, ...phrases.en };
+const ruFull = { ...ru, ...phrases.ru };
+
+const dictionaries = { en: enFull, ru: ruFull };
 
 export type Lang = keyof typeof dictionaries;
-export type CopyKey = keyof typeof en;
-export const copyKeys = Object.keys(en) as CopyKey[];
+export type CopyKey = keyof typeof enFull;
+export const copyKeys = Object.keys(enFull) as CopyKey[];
 
 export function copy(lang: Lang, key: CopyKey): string {
   return dictionaries[lang][key];
 }
 
+const aliases: Record<string, RouteId> = {
+  projects: "apps",
+  services: "system",
+  schedules: "system",
+  containers: "system",
+  users: "access",
+  changes: "events",
+  audit: "events",
+};
+
+export type Place = { route: RouteId; appId: string; tab: string };
+
+export function parseHash(hash: string): Place {
+  const parts = hash
+    .replace(/^#\/?/, "")
+    .split("?")[0]
+    .split("/")
+    .filter(Boolean)
+    .map((part) => {
+      try {
+        return decodeURIComponent(part);
+      } catch {
+        return part;
+      }
+    });
+  const head = aliases[parts[0] ?? ""] ?? parts[0] ?? "";
+  const route = (routes as readonly string[]).includes(head) ? (head as RouteId) : "overview";
+  let appId = "";
+  let tab = "";
+  if (route === "apps" && parts[1]) {
+    appId = parts[1];
+    tab = parts[2] || "summary";
+  } else if (route === "system") {
+    tab = parts[1] || "services";
+  } else if (route === "settings") {
+    tab = parts[1] || "server";
+  }
+  return { route, appId, tab };
+}
+
+export function hashFor(place: Place): string {
+  if (place.route === "apps" && place.appId) {
+    return `#/apps/${encodeURIComponent(place.appId)}/${place.tab || "summary"}`;
+  }
+  if (place.route === "system") return `#/system/${place.tab || "services"}`;
+  if (place.route === "settings" && place.tab && place.tab !== "server") {
+    return `#/settings/${place.tab}`;
+  }
+  return `#/${place.route}`;
+}
+
 export function routeFromHash(hash: string): RouteId {
-  const name = hash.replace(/^#\/?/, "").split("?")[0];
-  return (routes as readonly string[]).includes(name) ? (name as RouteId) : "overview";
+  return parseHash(hash).route;
 }
 
 /** Human label for a host/user/service payload key. */
@@ -375,6 +430,12 @@ export function fieldLabel(lang: Lang, key: string): string {
     "unit.enabled": "fieldEnabled",
     description: "fieldDescription",
     "unit.description": "fieldDescription",
+    "unit.exec_start": "execStart",
+    exec_start: "execStart",
+    "unit.restart": "restartPolicy",
+    restart: "restartPolicy",
+    "unit.working_directory": "workDir",
+    working_directory: "workDir",
     exposed: "exposed",
   };
   const hit = map[key];
@@ -393,6 +454,9 @@ export function predicateLabel(lang: Lang, predicate: string): string {
     "unit.enabled": "predUnitEnabled",
     "unit.description": "predUnitDescription",
     "unit.sub": "predUnitActive",
+    "unit.exec_start": "execStart",
+    "unit.restart": "restartPolicy",
+    "unit.working_directory": "workDir",
   };
   const hit = map[predicate];
   return hit ? copy(lang, hit) : predicate;
