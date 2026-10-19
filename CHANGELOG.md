@@ -2,6 +2,19 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.0] - 2026-10-19
+
+### Added
+- Application-first panel: Overview, Applications, Monitoring, Network, Access, Logs, Events, and Settings. System services stay one click away instead of in the main menu.
+- Directories that share a name and an environment suffix group into one application. A manual rename or split survives the next scan in the browser.
+- Host passport on `GET /api/v1/host`: memory, disk, addresses, sshd, sessions, sites, and when the scan finished.
+
+### Changed
+- Uptime, sizes, and chart counters are shown as days, binary sizes, percents, and rates.
+- Ports in `127.0.0.0/8` and `::1` are local. Private addresses are the internal network.
+- A unit that an enabled socket or template parent starts is no longer listed as failing to come back after reboot.
+- Logs open the system journal first and explain how to join `systemd-journal` when the panel cannot read it.
+
 ## [1.0.3] - 2026-10-16
 
 ### Fixed
