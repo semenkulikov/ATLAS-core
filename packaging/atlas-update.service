@@ -1,0 +1,15 @@
+[Unit]
+Description=ATLAS self-update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/bin/sh /opt/atlas/packaging/apply-update.sh
+TimeoutStartSec=600
+# Needs network to GitHub and write access under /opt and /usr.
+# Do not ProtectSystem=strict — install replaces /opt/atlas.
+
+[Install]
+WantedBy=multi-user.target

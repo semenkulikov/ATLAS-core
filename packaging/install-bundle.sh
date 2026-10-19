@@ -56,6 +56,14 @@ awk -v uid="$uid" '
   { print }
 ' "$root/packaging/atlas-helper.service" > /usr/lib/systemd/system/atlas-helper.service
 
+cp "$root/packaging/atlas-update.service" /usr/lib/systemd/system/atlas-update.service
+if [ -f "$root/packaging/minisign" ]; then
+  install -m 0755 "$root/packaging/minisign" /opt/atlas/packaging/minisign
+fi
+if [ -f "$root/packaging/apply-update.sh" ]; then
+  install -m 0755 "$root/packaging/apply-update.sh" /opt/atlas/packaging/apply-update.sh
+fi
+
 cp "$root/packaging/atlas.tmpfiles" /usr/lib/tmpfiles.d/atlas.conf
 if command -v systemd-tmpfiles >/dev/null 2>&1; then
   systemd-tmpfiles --create /usr/lib/tmpfiles.d/atlas.conf
@@ -64,9 +72,11 @@ printf '%s\n' "Installed from a signed archive. The interpreter is /opt/atlas/py
   > /etc/atlas/README
 
 systemctl daemon-reload
-systemctl enable atlas.service atlas-helper.service
+systemctl enable atlas.service atlas-helper.service atlas-update.service
 rm -f /run/atlas/web.sock /run/atlas/helper.sock
 systemctl reset-failed atlas.service atlas-helper.service 2>/dev/null || true
+# Restart the panel and helper only. Never start atlas-update here — that unit
+# replaces this install and would kill the oneshot mid-flight.
 systemctl restart atlas-helper.service atlas.service
 
 i=0
