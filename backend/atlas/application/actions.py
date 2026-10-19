@@ -45,17 +45,41 @@ def set_control(store: Store, enabled: bool) -> None:
     store.conn.commit()
 
 
+_BOOT_STATES = frozenset({"enabled", "static", "indirect", "generated", "alias"})
+
+
+def _starts_on_boot(name: str, enabled: object, by_name: dict[str, dict[str, object]]) -> bool:
+    """A unit comes back when it, its socket, or its template parent is enabled."""
+    if enabled in _BOOT_STATES:
+        return True
+    if name.endswith(".service"):
+        socket = f"{name[: -len('.service')]}.socket"
+        socket_row = by_name.get(socket, {})
+        if (
+            socket_row.get("unit.enabled") in _BOOT_STATES
+            or socket_row.get("unit.active") == "active"
+        ):
+            return True
+        if "@" in name:
+            parent = f"{name.split('@', 1)[0]}.service"
+            if by_name.get(parent, {}).get("unit.enabled") in _BOOT_STATES:
+                return True
+    return False
+
+
 def restart_risks(store: Store) -> list[dict[str, str]]:
     """Services and containers that are running but will not come back on boot."""
     scan_id = store.latest_scan_id()
     if scan_id is None:
         return []
     found: list[dict[str, str]] = []
-    for row in store.entities(scan_id, "service"):
+    services = list(store.entities(scan_id, "service"))
+    by_name = {str(row["key"]): row["payload"] for row in services}
+    for row in services:
         payload = row["payload"]
         active = payload.get("unit.active")
         enabled = payload.get("unit.enabled")
-        if active == "active" and enabled not in {"enabled", "static"}:
+        if active == "active" and not _starts_on_boot(str(row["key"]), enabled, by_name):
             found.append({"kind": "service", "name": str(row["key"]), "enabled": str(enabled)})
     for row in store.entities(scan_id, "container"):
         payload = row["payload"]
