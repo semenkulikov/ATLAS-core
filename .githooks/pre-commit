@@ -1,0 +1,47 @@
+#!/bin/sh
+# Block commits that would fail GitHub Actions CI.
+# Enable once per clone: scripts/install-git-hooks.sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+if [ ! -x "$root/scripts/ci-check.sh" ]; then
+  echo "scripts/ci-check.sh is missing or not executable." >&2
+  exit 1
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR || true)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+need_backend=0
+need_frontend=0
+old_ifs=$IFS
+IFS='
+'
+for path in $staged; do
+  case "$path" in
+    backend/*|backend/pyproject.toml|backend/uv.lock|.github/workflows/*|scripts/ci-check.sh|.githooks/*)
+      need_backend=1
+      ;;
+    frontend/*)
+      need_frontend=1
+      ;;
+  esac
+done
+IFS=$old_ifs
+
+if [ "$need_backend" -eq 0 ] && [ "$need_frontend" -eq 0 ]; then
+  exit 0
+fi
+
+echo "pre-commit: running CI checks for staged changes…"
+if [ "$need_backend" -eq 1 ] && [ "$need_frontend" -eq 1 ]; then
+  exec "$root/scripts/ci-check.sh" all
+fi
+if [ "$need_backend" -eq 1 ]; then
+  exec "$root/scripts/ci-check.sh" backend
+fi
+exec "$root/scripts/ci-check.sh" frontend

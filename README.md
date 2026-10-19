@@ -72,6 +72,15 @@ curl -fsSL https://raw.githubusercontent.com/semenkulikov/ATLAS-core/main/packag
 
 ---
 
+## Development
+
+CI gates also run on commit after hooks are enabled:
+
+```bash
+scripts/install-git-hooks.sh   # once per clone
+scripts/ci-check.sh            # same checks as GitHub Actions
+```
+
 ## Docs
 
 - [Security](docs/security-model.md) · [FAQ](docs/faq.md) · [Commands](docs/cli.md)
