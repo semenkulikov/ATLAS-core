@@ -467,6 +467,7 @@ export function actionTitle(lang: Lang, op: string): string {
   if (op === "container.restart") return copy(lang, "opRestartContainer");
   if (op === "host.reboot") return copy(lang, "opReboot");
   if (op === "host.poweroff") return copy(lang, "opPoweroff");
+  if (op === "app.update") return copy(lang, "opUpdate");
   return op;
 }
 

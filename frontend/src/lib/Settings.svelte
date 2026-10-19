@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import ActionDialog from "./ActionDialog.svelte";
   import { api } from "./api";
   import { copy, type Lang } from "./i18n";
@@ -19,6 +19,15 @@
   let raw = $state(localStorage.getItem("atlas.raw") === "1");
   let data = $state<PanelData | null>(null);
   let reboot = $state<string | null>(null);
+  let updateInfo = $state<{
+    current: string;
+    latest: string | null;
+    update_available: boolean;
+    error: string | null;
+  } | null>(null);
+  let updating = $state(false);
+  let showUpdate = $state(false);
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   const tabs = [
     ["server", "tabServer"],
@@ -35,6 +44,56 @@
       .catch(() => undefined);
   }
 
+  function loadUpdate(): void {
+    void api<{
+      current: string;
+      latest: string | null;
+      update_available: boolean;
+      error: string | null;
+    }>("/api/v1/update")
+      .then((body) => {
+        updateInfo = body;
+      })
+      .catch(() => {
+        updateInfo = { current: "—", latest: null, update_available: false, error: "unreachable" };
+      });
+  }
+
+  function stopPoll(): void {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function watchUpdate(targetVersion: string): void {
+    updating = true;
+    note = copy(lang, "updateStarted");
+    stopPoll();
+    let tries = 0;
+    pollTimer = setInterval(() => {
+      tries += 1;
+      void api<{ current: string }>("/api/v1/update")
+        .then((body) => {
+          if (body.current === targetVersion) {
+            stopPoll();
+            location.reload();
+          }
+        })
+        .catch(() => {
+          // Socket drops while the unit restarts the panel.
+          if (tries > 3) {
+            /* keep polling until the new process answers or we hit the limit */
+          }
+        });
+      if (tries > 90) {
+        stopPoll();
+        updating = false;
+        note = copy(lang, "error");
+      }
+    }, 2000);
+  }
+
   onMount(() => {
     const place = location.hash.split("/")[2];
     if (place === "panel" || place === "alerts" || place === "about" || place === "server") tab = place;
@@ -49,7 +108,10 @@
       data = body;
     }).catch(() => undefined);
     reloadChannels();
+    loadUpdate();
   });
+
+  onDestroy(stopPoll);
 
   async function saveChannel(event: SubmitEvent): Promise<void> {
     event.preventDefault();
@@ -141,7 +203,30 @@
     </form>
   {:else}
     <div class="card grid gap-3">
-      <p><span class="kicker">{copy(lang, "panelVersion")}</span> {copy(lang, "versionUnknown")}</p>
+      {#if updateInfo}
+        <p><span class="kicker">{copy(lang, "installedVersion")}</span> <span class="mono text-paper">{updateInfo.current}</span></p>
+        {#if updateInfo.latest}
+          <p><span class="kicker">{copy(lang, "availableVersion")}</span> <span class="mono text-paper">{updateInfo.latest}</span></p>
+        {/if}
+        {#if updateInfo.error && !updateInfo.latest}
+          <p class="text-sm text-fog">{copy(lang, "updateUnavailable")}</p>
+        {:else if updateInfo.update_available}
+          <p class="text-sm text-fog">{copy(lang, "updateHint")}</p>
+          <button
+            type="button"
+            class="btn btn-accent w-fit"
+            disabled={role !== "owner" || !enabled || updating || !updateInfo.latest}
+            onclick={() => (showUpdate = true)}
+          >
+            {copy(lang, "updateNow")}
+          </button>
+          {#if !enabled}<p class="kicker">{copy(lang, "readOnly")}</p>{/if}
+        {:else if updateInfo.latest}
+          <p class="text-sm text-fog">{copy(lang, "updateCurrent")}</p>
+        {/if}
+      {:else}
+        <p class="text-sm text-fog">{copy(lang, "updateChecking")}</p>
+      {/if}
       <p class="text-sm text-fog">{copy(lang, "signatureHint")}</p>
       <label class="text-sm text-fog">{copy(lang, "languageLabel")}
         <select class="mt-1 block h-8 rounded-md border border-smoke bg-void px-2" value={lang} onchange={(event) => onlang((event.currentTarget as HTMLSelectElement).value === "en" ? "en" : "ru")}>
@@ -168,5 +253,21 @@
     risk="critical"
     note={riskNote}
     onclose={() => (reboot = null)}
+  />
+{/if}
+
+{#if showUpdate && updateInfo?.latest}
+  <ActionDialog
+    {lang}
+    op="app.update"
+    objectName={updateInfo.latest}
+    risk="high"
+    note={copy(lang, "updateHint")}
+    onclose={() => (showUpdate = false)}
+    ondone={() => {
+      const targetVersion = updateInfo?.latest;
+      showUpdate = false;
+      if (targetVersion) watchUpdate(targetVersion);
+    }}
   />
 {/if}

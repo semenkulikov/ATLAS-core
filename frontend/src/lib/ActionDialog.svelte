@@ -11,6 +11,7 @@
     risk,
     note = "",
     onclose,
+    ondone,
   }: {
     lang: Lang;
     op: string;
@@ -18,6 +19,7 @@
     risk: "medium" | "high" | "critical";
     note?: string;
     onclose: () => void;
+    ondone?: () => void;
   } = $props();
 
   let confirm = $state("");
@@ -45,15 +47,18 @@
     const params: Record<string, string> =
       op === "host.reboot" || op === "host.poweroff"
         ? { hostname: objectName }
-        : op.startsWith("container.")
-          ? { name: objectName }
-          : { unit: objectName };
+        : op === "app.update"
+          ? { version: objectName }
+          : op.startsWith("container.")
+            ? { name: objectName }
+            : { unit: objectName };
     try {
       const body = await api<{ ok?: boolean; pending?: string; result?: string }>(
         `/api/v1/actions/${op}`,
         { method: "POST", body: JSON.stringify({ params, confirm, code }) },
       );
       done = body.pending ? String(body.pending) : copy(lang, "saved");
+      if (!body.pending) ondone?.();
     } catch (caught) {
       errorMessage = shownError(caught, lang);
       errorExtra = errorDetail(caught);
