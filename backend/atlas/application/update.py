@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 import re
 import time
-import urllib.error
-import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
+
+import httpx
 
 from atlas import __version__
 
@@ -88,7 +88,7 @@ def fetch_latest(
         latest = latest_from_payload(payload)
         if latest is None:
             error = "The latest release tag is not a version."
-    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+    except (OSError, httpx.HTTPError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
         error = str(exc) or exc.__class__.__name__
 
     if latest is not None:
@@ -114,13 +114,16 @@ def clear_cache() -> None:
 
 
 def _http_get(url: str) -> object:
-    request = urllib.request.Request(
+    """Fetch JSON from an https URL. Only used for the fixed GitHub releases API."""
+    if not url.startswith("https://"):
+        raise ValueError("Only https URLs are allowed.")
+    response = httpx.get(
         url,
         headers={
             "Accept": "application/vnd.github+json",
             "User-Agent": f"ATLAS/{__version__}",
         },
-        method="GET",
+        timeout=4.0,
     )
-    with urllib.request.urlopen(request, timeout=4) as response:
-        return json.loads(response.read().decode("utf-8"))
+    response.raise_for_status()
+    return response.json()
