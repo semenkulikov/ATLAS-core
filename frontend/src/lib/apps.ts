@@ -175,9 +175,74 @@ function containerHints(row: Entity): string[] {
   return hints.filter(Boolean);
 }
 
+function commandPaths(command: string): string[] {
+  return command.split(/\s+/).filter((token) => {
+    if (!token.startsWith("/")) return false;
+    if (token === "/usr/bin" || token.startsWith("/usr/bin/")) return false;
+    if (token === "/usr/sbin" || token.startsWith("/usr/sbin/")) return false;
+    return true;
+  });
+}
+
+function publishedPorts(row: Entity): number[] {
+  const ports = row.payload.ports;
+  if (!Array.isArray(ports)) return [];
+  const found: number[] = [];
+  for (const item of ports) {
+    if (!item || typeof item !== "object") continue;
+    const value = Number((item as { PublicPort?: unknown }).PublicPort);
+    if (Number.isInteger(value) && value > 0 && value < 65536) found.push(value);
+  }
+  return found;
+}
+
+function portNumber(row: Entity): number | null {
+  const value = Number(row.payload.port);
+  if (!Number.isInteger(value) || value <= 0 || value >= 65536) return null;
+  return value;
+}
+
+function mentionsPort(text: string, port: number): boolean {
+  return new RegExp(`(?:^|[^0-9])${port}(?:[^0-9]|$)`).test(text);
+}
+
+function textList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => textOf(item)).filter(Boolean);
+}
+
+function listenNumber(value: string): number | null {
+  const matches = value.match(/\d{1,5}/g);
+  if (!matches) return null;
+  for (const item of [...matches].reverse()) {
+    const port = Number(item);
+    if (port > 0 && port < 65536) return port;
+  }
+  return null;
+}
+
+function siteOwner(apps: AppModel[], sites: Entity[], port: number): AppModel | undefined {
+  for (const site of sites) {
+    const listens = textList(site.payload.listens);
+    if (!listens.some((item) => listenNumber(item) === port)) continue;
+    const roots = textList(site.payload.roots);
+    const byRoot = apps.find((app) => roots.some((root) => matchesPath(root, app)));
+    if (byRoot) return byRoot;
+    const proxies = textList(site.payload.proxies);
+    const byProxy = apps.find((app) =>
+      app.containers.some((container) =>
+        publishedPorts(container).some((published) => proxies.some((proxy) => mentionsPort(proxy, published))),
+      ),
+    );
+    if (byProxy) return byProxy;
+  }
+  return undefined;
+}
+
 export function linkInventory(
   apps: AppModel[],
   bag: { services: Entity[]; containers: Entity[]; ports: Entity[]; schedules: Entity[] },
+  sites: Entity[] = [],
 ): { apps: AppModel[]; system: SystemBag } {
   const system: SystemBag = { services: [], containers: [], ports: [], schedules: [] };
   const fresh = apps.map((app) => ({ ...app, services: [] as Entity[], containers: [] as Entity[], ports: [] as Entity[], schedules: [] as Entity[] }));
@@ -190,7 +255,9 @@ export function linkInventory(
     app[key].push(row);
   };
   for (const row of bag.services) {
-    take(row, [textOf(row.payload.working_directory), textOf(row.payload.description), row.key], "services");
+    const directory = textOf(row.payload.working_directory);
+    const fromCommand = commandPaths(textOf(row.payload.exec_start));
+    take(row, [directory, ...fromCommand, textOf(row.payload.description), row.key], "services");
   }
   for (const row of bag.containers) take(row, containerHints(row), "containers");
   for (const row of bag.schedules) {
@@ -200,7 +267,11 @@ export function linkInventory(
     const process = row.payload.process;
     const cmdline = process && typeof process === "object" ? textOf((process as Record<string, unknown>).cmdline) : "";
     const comm = process && typeof process === "object" ? textOf((process as Record<string, unknown>).comm) : "";
-    const owner = fresh.find((app) => app.containers.some((item) => textOf(item.payload.name) === comm));
+    const number = portNumber(row);
+    const named = fresh.find((app) => app.containers.some((item) => textOf(item.payload.name) === comm));
+    const published = number == null ? undefined : fresh.find((app) => app.containers.some((item) => publishedPorts(item).includes(number)));
+    const viaSite = number == null ? undefined : siteOwner(fresh, sites, number);
+    const owner = named ?? published ?? viaSite;
     if (owner) owner.ports.push(row);
     else take(row, [cmdline, comm], "ports");
   }

@@ -69,6 +69,15 @@ def test_whitelist_refuses_a_protected_unit_and_a_shell_character() -> None:
         build_plan("read.command", {"argv": ["nsenter", "-t", "2", "-n", "ss", "-lntup"]})
     project = build_plan("read.project", {"path": "/root/session_bot/main.py"})
     assert project.confirm == "/root/session_bot/main.py"
+    anchored = build_plan(
+        "read.project", {"path": "/opt/ledger/app.py", "anchor": "/opt/ledger/app.py"}
+    )
+    assert anchored.argv == ("/opt/ledger/app.py",)
+    container_logs = build_plan("read.logs", {"id": "ab" * 32, "tail": 40})
+    assert container_logs.confirm == "ab" * 32
+    assert container_logs.argv == ("40",)
+    with pytest.raises(ProtocolError):
+        build_plan("read.logs", {"id": "not-a-container", "tail": 10})
     with pytest.raises(ProtocolError):
         build_plan("read.project", {"path": "/etc/passwd"})
     assert listed.confirm == "/etc/sudoers.d"

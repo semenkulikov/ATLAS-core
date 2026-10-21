@@ -39,9 +39,20 @@ def read_command(path: str, argv: list[str]) -> dict[str, object]:
     return call_helper(path, {"op": "read.command", "params": {"argv": argv}})
 
 
-def read_project(path: str, target: str) -> dict[str, object]:
+def read_project(path: str, target: str, anchor: str = "") -> dict[str, object]:
     """Ask the helper for a project the panel user cannot see, such as one under /root."""
-    return call_helper(path, {"op": "read.project", "params": {"path": target}})
+    return call_helper(
+        path,
+        {"op": "read.project", "params": {"path": target, "anchor": anchor}},
+    )
+
+
+def read_logs(path: str, container_id: str, tail: int) -> dict[str, object]:
+    """Ask the helper for the tail of one container log. The id is hexadecimal."""
+    return call_helper(
+        path,
+        {"op": "read.logs", "params": {"id": container_id, "tail": tail}},
+    )
 
 
 def read_dir(path: str, target: str) -> dict[str, object]:

@@ -61,4 +61,53 @@ describe("application grouping", () => {
     expect(linked.apps[0]?.status).toBe("running");
     expect(linked.system.services.map((row) => row.key)).toEqual(["ssh.service"]);
   });
+
+  it("links a service by an ExecStart path when the unit has no working directory", () => {
+    const grouped = groupProjects([project("ledger", "/opt/ledger")]);
+    const linked = linkInventory(grouped, {
+      services: [
+        {
+          kind: "service",
+          key: "queue.service",
+          payload: { working_directory: "", exec_start: "/usr/bin/python3 /opt/ledger/app.py" },
+        },
+      ],
+      containers: [],
+      ports: [],
+      schedules: [],
+    });
+    expect(linked.apps[0]?.services.map((row) => row.key)).toEqual(["queue.service"]);
+  });
+
+  it("links a listener whose port is published by the application's container", () => {
+    const grouped = groupProjects([project("ledger", "/opt/ledger")]);
+    const linked = linkInventory(grouped, {
+      services: [],
+      containers: [
+        { kind: "container", key: "box", payload: { name: "ledger", ports: [{ PublicPort: 9000 }] } },
+      ],
+      ports: [
+        { kind: "port", key: "tcp:9000", payload: { port: 9000, process: { comm: "docker-proxy" } } },
+        { kind: "port", key: "tcp:80", payload: { port: 80, process: { comm: "nginx" } } },
+      ],
+      schedules: [],
+    });
+    expect(linked.apps[0]?.ports.map((row) => row.key)).toEqual(["tcp:9000"]);
+    expect(linked.system.ports.map((row) => row.key)).toEqual(["tcp:80"]);
+  });
+
+  it("links a proxy listener only when the site points at the project", () => {
+    const grouped = groupProjects([project("ledger", "/opt/ledger")]);
+    const linked = linkInventory(
+      grouped,
+      {
+        services: [],
+        containers: [],
+        ports: [{ kind: "port", key: "tcp:443", payload: { port: 443, process: { comm: "nginx" } } }],
+        schedules: [],
+      },
+      [{ kind: "site", key: "ledger", payload: { roots: ["/opt/ledger/public"], listens: ["443 ssl"], proxies: [] } }],
+    );
+    expect(linked.apps[0]?.ports.map((row) => row.key)).toEqual(["tcp:443"]);
+  });
 });

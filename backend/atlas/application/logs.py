@@ -14,6 +14,7 @@ from atlas.collectors.view import is_forbidden_path
 from atlas.redact import env_key_names, mask_secrets
 
 _UNIT = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@._-")
+_CONTAINER = re.compile(r"^[0-9a-fA-F]{12,64}$")
 
 
 class LogError(Exception):
@@ -31,11 +32,15 @@ def read_log(
     *,
     query: str = "",
     pattern: str = "",
+    helper_socket: str = "",
 ) -> dict[str, object]:
-    """Return the newest lines from a file under ``root`` or from journald."""
+    """Return the newest lines from a file under ``root``, journald, or a container."""
     bounded = max(1, min(limit, 500))
     if source.startswith("journal:"):
         lines = _journal(source.removeprefix("journal:"), bounded)
+        return {"status": "ok", "source": source, "lines": _select(lines, query, pattern)}
+    if source.startswith("container:"):
+        lines = _container(source.removeprefix("container:"), bounded, helper_socket)
         return {"status": "ok", "source": source, "lines": _select(lines, query, pattern)}
     path = _inside_root(root, source)
     if path.name == ".env" or path.name.endswith(".env"):
@@ -105,3 +110,21 @@ def _journal(unit: str, limit: int) -> list[str]:
     if completed.returncode != 0 and not completed.stdout:
         raise LogError("journalctl could not read that unit.")
     return [mask_secrets(line)[:2000] for line in completed.stdout.splitlines()[-limit:]]
+
+
+def _container(container_id: str, limit: int, helper_socket: str) -> list[str]:
+    if _CONTAINER.fullmatch(container_id) is None:
+        raise LogError("The container id is not usable.")
+    if not helper_socket:
+        raise LogError("The container log could not be read.")
+    from atlas.helper.client import read_logs
+
+    try:
+        answer = read_logs(helper_socket, container_id, limit)
+    except (OSError, ValueError) as exc:
+        raise LogError("The container log could not be read.") from exc
+    if not answer.get("ok"):
+        raise LogError("The container log could not be read.")
+    text = answer.get("text")
+    body = text if isinstance(text, str) else ""
+    return [mask_secrets(line)[:2000] for line in body.splitlines()[-limit:]]

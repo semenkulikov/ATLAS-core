@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 from atlas.application.scan import run_scan
-from atlas.collectors.view import open_view
-from atlas.detectors.discover import _git_facts, discover, find_root
+from atlas.collectors.platforms import decode_docker_stream
+from atlas.collectors.view import FixtureRunner, HostView, SubprocessRunner, open_view
+from atlas.detectors.discover import _git_facts, discover, find_root, project_snapshot
 from atlas.detectors.rules import apply_rules, requirement_versions
 from atlas.domain import CollectorResult, Entity
 from atlas.knowledge.loader import reference_for
@@ -17,6 +19,7 @@ from atlas.storage.db import Store
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "partial-host"
 CANARY = "ATLAS_CANARY_7f3a9c"
+discover_mod = sys.modules["atlas.detectors.discover"]
 
 
 def test_shop_project_is_django_and_searchable(tmp_path: Path) -> None:
@@ -190,6 +193,75 @@ def test_a_git_checkout_records_the_commit(tmp_path: Path) -> None:
     assert predicates["git.dirty"] == "no"
     versions = requirement_versions("-r extra.txt\n# note\nDjango==4.2.16\n")
     assert versions == [(3, "Django", "4.2.16")]
+
+
+def test_a_borrowed_directory_records_stack_and_dependency_facts(
+    tmp_path: Path, monkeypatch
+) -> None:
+    tree = tmp_path / "tree"
+    project = tree / "opt" / "ledger"
+    project.mkdir(parents=True)
+    (project / "requirements.txt").write_text("flask==3.0.3\n", encoding="utf-8")
+    moment = datetime(2026, 10, 21, tzinfo=UTC)
+    readable = HostView(tree, FixtureRunner(tree), moment)
+    anchor = "/opt/ledger/venv/bin/python /opt/ledger/app.py"
+    snapshot = project_snapshot(readable, "/opt/ledger", anchor)
+    assert "Flask" in snapshot["stack"]
+    seen: dict[str, str] = {}
+
+    def borrow(socket_path: str, start: str, anchor_text: str = "") -> dict[str, object]:
+        del socket_path, start
+        seen["anchor"] = anchor_text
+        return snapshot
+
+    monkeypatch.setattr(discover_mod, "find_root", lambda view, start: None)
+    monkeypatch.setattr(discover_mod, "_borrow_project", borrow)
+    hidden = HostView(tree, FixtureRunner(tree), moment, helper_socket="/run/atlas/helper.sock")
+    result = discover(
+        hidden,
+        [
+            CollectorResult(
+                (),
+                (
+                    Entity(
+                        "service",
+                        "ledger.service",
+                        {
+                            "unit": "ledger.service",
+                            "working_directory": None,
+                            "exec_start": anchor,
+                        },
+                    ),
+                ),
+                (),
+            )
+        ],
+    )
+    assert seen["anchor"] == anchor
+    assert any(
+        item.predicate == "dependency.flask" and item.value == "3.0.3" for item in result.facts
+    )
+    assert any(item.value == "Flask" for item in result.facts)
+
+
+def test_a_long_command_snapshot_is_kept(monkeypatch) -> None:
+    blob = "x" * 1_500_000
+
+    class Completed:
+        returncode = 0
+        stdout = blob
+        stderr = ""
+
+    monkeypatch.setattr("atlas.collectors.view.subprocess.run", lambda *args, **kwargs: Completed())
+    result = SubprocessRunner().run(["systemctl", "show", "--type=service", "--all"])
+    assert len(result.stdout) == 1_500_000
+
+
+def test_docker_log_frames_become_text() -> None:
+    payload = b"hello\n"
+    frame = bytes([1, 0, 0, 0]) + len(payload).to_bytes(4, "big") + payload
+    assert decode_docker_stream(frame) == "hello\n"
+    assert decode_docker_stream(b"plain line\n") == "plain line\n"
 
 
 def _git(root: Path, args: list[str]) -> None:

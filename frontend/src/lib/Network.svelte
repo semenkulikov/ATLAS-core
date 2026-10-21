@@ -15,6 +15,15 @@
   let picked = $state<string>("");
   let appFilter = $state("");
 
+  $effect(() => {
+    if (!picked) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") picked = "";
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
   selectedApp.subscribe((id) => {
     appFilter = id;
   });
@@ -168,6 +177,7 @@
 </section>
 
 {#if open}
+  <button type="button" class="scrim" aria-label={copy(lang, "close")} onclick={() => (picked = "")}></button>
   <div class="drawer" role="dialog" aria-label={copy(lang, "portWord")}>
     <div class="mb-4 flex items-center justify-between">
       <h2 class="block-title">{open.port}</h2>

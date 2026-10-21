@@ -90,7 +90,7 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     """Build the API. OpenAPI is not mounted publicly; owners fetch it explicitly."""
-    app = FastAPI(title="ATLAS", version="1.1.4", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="ATLAS", version="1.1.5", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.atlas = AppState(
         store,
         settings,
@@ -558,6 +558,7 @@ async def logs(request: Request) -> Response:
             limit,
             query=request.query_params.get("q", ""),
             pattern=request.query_params.get("pattern", ""),
+            helper_socket=_state(request).settings.helper_socket,
         )
     except (LogError, ValueError) as exc:
         message = exc.message if isinstance(exc, LogError) else "The log query is not valid."
@@ -649,7 +650,12 @@ async def stream(websocket: WebSocket) -> None:
         try:
             while True:
                 try:
-                    payload = read_log(state.settings.root, source, 100)
+                    payload = read_log(
+                        state.settings.root,
+                        source,
+                        100,
+                        helper_socket=state.settings.helper_socket,
+                    )
                 except LogError as exc:
                     payload = {"status": "unavailable", "reason": exc.message, "lines": []}
                 await websocket.send_json({"channel": channel, "payload": payload})

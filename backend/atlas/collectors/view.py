@@ -101,10 +101,12 @@ class SubprocessRunner:
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             return CommandResult(tuple(argv), 127, "", str(exc))
+        # systemctl show for a busy host is larger than 1 MB. A shorter cap
+        # drops ActiveState for units that sort late in that one snapshot.
         return CommandResult(
             tuple(argv),
             completed.returncode,
-            completed.stdout[:1_000_000],
+            completed.stdout[:8_000_000],
             completed.stderr[:20_000],
         )
 

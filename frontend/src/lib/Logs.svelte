@@ -1,13 +1,19 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import type { AppModel } from "./apps";
   import { api, errorDetail, shownError } from "./api";
+  import { textOf } from "./format";
   import { copy, type Lang } from "./i18n";
+  import { loadPanel } from "./inventory";
   import { selectedApp } from "./selection";
   import CopyButton from "./ui/CopyButton.svelte";
   import LiveBadge from "./ui/LiveBadge.svelte";
 
+  const containerId = /^[0-9a-fA-F]{12,64}$/;
+
   let { lang }: { lang: Lang } = $props();
   let source = $state("journal:syslog");
+  let apps = $state<AppModel[]>([]);
   let query = $state("");
   let lines = $state<string[]>([]);
   let follow = $state(true);
@@ -28,7 +34,58 @@
   );
   const errorCount = $derived(lines.filter((line) => /error|crit/i.test(line)).length);
 
+  async function ensureApps(): Promise<AppModel[]> {
+    if (apps.length > 0) return apps;
+    const panel = await loadPanel();
+    apps = panel.apps;
+    return apps;
+  }
+
+  async function loadApp(id: string): Promise<void> {
+    const known = await ensureApps();
+    const found = known.find((item) => item.id === id);
+    if (!found) {
+      lines = [];
+      errorMessage = "";
+      detail = "";
+      return;
+    }
+    const chunks: string[] = [];
+    let failure = "";
+    for (const service of found.services) {
+      const unit = service.key.includes(".") ? service.key : `${service.key}.service`;
+      try {
+        const params = new URLSearchParams({ source: `journal:${unit}`, q: query });
+        const payload = await api<{ lines: string[] }>(`/api/v1/logs?${params.toString()}`);
+        if (payload.lines.length) chunks.push(`# ${unit}`, ...payload.lines);
+      } catch (error) {
+        failure = shownError(error, lang);
+        detail = errorDetail(error);
+      }
+    }
+    for (const container of found.containers) {
+      const cid = textOf(container.payload.id);
+      if (!containerId.test(cid)) continue;
+      const name = textOf(container.payload.name) || cid.slice(0, 12);
+      try {
+        const params = new URLSearchParams({ source: `container:${cid}`, q: query });
+        const payload = await api<{ lines: string[] }>(`/api/v1/logs?${params.toString()}`);
+        if (payload.lines.length) chunks.push(`# ${name}`, ...payload.lines);
+      } catch (error) {
+        failure = shownError(error, lang);
+        detail = errorDetail(error);
+      }
+    }
+    lines = chunks;
+    errorMessage = chunks.length === 0 ? failure : "";
+    if (chunks.length > 0) detail = "";
+  }
+
   async function load(): Promise<void> {
+    if (source.startsWith("app:")) {
+      await loadApp(source.slice(4));
+      return;
+    }
     try {
       const params = new URLSearchParams({ source, q: query });
       const payload = await api<{ lines: string[] }>(`/api/v1/logs?${params.toString()}`);
@@ -41,6 +98,19 @@
       detail = errorDetail(error);
     }
   }
+
+  $effect(() => {
+    const id = $selectedApp;
+    if (id) {
+      source = `app:${id}`;
+      return;
+    }
+    if (source.startsWith("app:")) source = "journal:syslog";
+  });
+
+  $effect(() => {
+    void ensureApps().catch(() => undefined);
+  });
 
   $effect(() => {
     clearInterval(timer);
@@ -80,9 +150,19 @@
   <form class="mb-4 flex flex-wrap gap-2" onsubmit={(event) => { event.preventDefault(); void load(); }}>
     <label class="text-sm text-fog">
       {copy(lang, "sourceLabel")}
-      <select class="mt-1 block h-8 rounded-md border border-smoke bg-void px-2 font-mono text-sm text-paper" bind:value={source}>
+      <select
+        class="mt-1 block h-8 rounded-md border border-smoke bg-void px-2 font-mono text-sm text-paper"
+        bind:value={source}
+        onchange={() => {
+          if (source.startsWith("app:")) selectedApp.set(source.slice(4));
+          else selectedApp.set("");
+        }}
+      >
         <option value="journal:syslog">{copy(lang, "syslogJournal")}</option>
         <option value="journal:atlas">{copy(lang, "atlasJournal")}</option>
+        {#each apps as item (item.id)}
+          <option value={`app:${item.id}`}>{item.name}</option>
+        {/each}
       </select>
     </label>
     <label class="text-sm text-fog">

@@ -99,6 +99,18 @@
     if (location.hash !== canonical) history.replaceState(null, "", canonical);
   }
 
+  $effect(() => {
+    if (!switcher && !menu) return;
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest("[data-pop]")) return;
+      switcher = false;
+      menu = false;
+    };
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  });
+
   onMount(() => {
     const stored = localStorage.getItem("atlas.nav");
     const wide = window.matchMedia("(min-width: 1280px)").matches;
@@ -183,7 +195,7 @@
   </nav>
   <div class="workspace">
     <header class="topbar">
-      <div class="relative">
+      <div class="relative" data-pop>
         <button type="button" class="btn btn-secondary w-full justify-between" onclick={() => (switcher = !switcher)}>
           <span class="truncate">{currentApp ? currentApp.name : copy(lang, "allApps")}</span>
         </button>
@@ -220,7 +232,7 @@
           <span class="dot {$refreshedAt ? 'ok' : ''}"></span>
           <span class="kicker">{copy(lang, "liveWord")}</span>
         </span>
-        <div class="relative">
+        <div class="relative" data-pop>
           <button type="button" class="btn btn-ghost" onclick={() => (menu = !menu)} aria-label={copy(lang, "userMenu")}>
             <Icon name="user" />
           </button>
@@ -281,6 +293,7 @@
 </nav>
 
 {#if more}
+  <button type="button" class="scrim" aria-label={copy(lang, "close")} onclick={() => (more = false)}></button>
   <div class="drawer" role="dialog" aria-label={copy(lang, "moreSheet")}>
     {#each ["access", "logs", "events", "settings", "system"] as id (id)}
       <a class="nav-item" href={id === "system" ? "#/system/services" : `#/${id}`} onclick={() => (more = false)}>
@@ -292,6 +305,7 @@
 
 {#if palette}
   <div class="palette" use:portal role="dialog" aria-modal="true" aria-label={copy(lang, "search")}>
+    <button type="button" class="scrim" aria-label={copy(lang, "close")} onclick={() => (palette = false)}></button>
     <div class="palette-card">
       <input class="h-10 w-full rounded-md border border-smoke bg-void px-3" bind:value={query} placeholder={copy(lang, "searchPlaceholder")} />
       <p class="kicker mt-3">{copy(lang, "navLabel")}</p>
@@ -309,8 +323,9 @@
 {/if}
 
 {#if help}
-  <div class="atlas-backdrop-in fixed inset-0 z-30 grid place-items-center bg-void/80 p-4" role="dialog" aria-modal="true" aria-label={copy(lang, "shortcuts")}>
-    <div class="card w-full max-w-md">
+  <div class="dialog-layer atlas-backdrop-in fixed inset-0 z-30 grid place-items-center bg-void/80 p-4" role="dialog" aria-modal="true" aria-label={copy(lang, "shortcuts")}>
+    <button type="button" class="scrim" aria-label={copy(lang, "close")} onclick={() => (help = false)}></button>
+    <div class="card relative z-[1] w-full max-w-md">
       <h2 class="block-title mb-3">{copy(lang, "shortcuts")}</h2>
       <ul class="space-y-2 text-sm">
         <li>Ctrl+K · {copy(lang, "search")}</li>
@@ -325,6 +340,7 @@
 {/if}
 
 {#if $proof}
+  <button type="button" class="scrim" aria-label={copy(lang, "close")} onclick={() => proof.set(null)}></button>
   <div class="drawer" role="dialog" aria-modal="true" aria-label={copy(lang, "showProof")}>
     <div class="mb-4 flex items-center justify-between">
       <h2 class="block-title">{copy(lang, "showProof")}</h2>

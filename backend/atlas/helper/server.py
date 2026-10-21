@@ -134,7 +134,11 @@ class HelperServer:
         if plan.op == "read.dir":
             return self._read_dir(plan.confirm)
         if plan.op == "read.project":
-            return self._read_project(plan.confirm)
+            anchor = plan.argv[0] if plan.argv else ""
+            return self._read_project(plan.confirm, anchor)
+        if plan.op == "read.logs":
+            tail = int(plan.argv[0]) if plan.argv and plan.argv[0].isdigit() else 200
+            return self._read_logs(plan.confirm, tail)
         if plan.op == "read.engine":
             route = params.get("path")
             if not isinstance(route, str):
@@ -144,7 +148,7 @@ class HelperServer:
             return self._schedule(plan)
         return self._run(plan)
 
-    def _read_project(self, start: str) -> dict[str, object]:
+    def _read_project(self, start: str, anchor: str = "") -> dict[str, object]:
         from atlas.collectors.view import open_view
         from atlas.detectors.discover import find_root, project_snapshot
 
@@ -152,7 +156,24 @@ class HelperServer:
         root = find_root(view, start)
         if root is None:
             return {"ok": True, "project": None}
-        return {"ok": True, "project": project_snapshot(view, root)}
+        return {"ok": True, "project": project_snapshot(view, root, anchor)}
+
+    def _read_logs(self, container_id: str, tail: int) -> dict[str, object]:
+        from atlas.collectors.platforms import container_logs
+
+        for sock in (
+            Path("/var/run/docker.sock"),
+            Path("/run/docker.sock"),
+            Path("/run/podman/podman.sock"),
+        ):
+            if not sock.exists():
+                continue
+            try:
+                text = container_logs(sock, container_id, tail)
+            except Exception as exc:
+                return {"ok": False, "error": f"{sock}: {exc.__class__.__name__}"}
+            return {"ok": True, "text": mask_secrets(text)[:500_000]}
+        return {"ok": False, "error": "container engine", "status": "absent"}
 
     def _read_file(self, target: str) -> dict[str, object]:
         if not readable_path(target):

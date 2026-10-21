@@ -2,6 +2,17 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.5] - 2026-10-21
+
+### Fixed
+- An event names the container, service, or port from the scan, and a project lists its own recent changes.
+- Logs can follow one application: the service journal, or the container log read through the helper. The button in the project opens that view.
+- Menus, drawers, and the search palette close on a click outside them. A restart confirmation stays until it is cancelled.
+- Project documents render headings, emphasis, lists, code, and links. The text is escaped before those tags are added.
+- A listening port joins the application when its number is a published container port, or when a site root or proxy points at that project.
+- A service joins its project when the program path in ExecStart lies inside the project, even with no working directory.
+- A project the panel user cannot read still keeps its stack, dependency, and git facts. A long systemctl snapshot keeps the state of units that sort late.
+
 ## [1.1.4] - 2026-10-21
 
 ### Fixed

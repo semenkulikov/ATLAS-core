@@ -2,21 +2,17 @@
   import { onMount } from "svelte";
   import { api, shownError } from "./api";
   import { formatWhen } from "./format";
-  import { copy, type CopyKey, type Lang } from "./i18n";
+  import { copy, type Lang } from "./i18n";
+  import { changedFields, eventMatchesApp, eventTitle, type ChangeRow } from "./events";
   import { loadPanel } from "./inventory";
   import { selectedApp } from "./selection";
+  import type { AppModel } from "./apps";
 
-  type Change = {
-    entity_kind: string;
-    entity_key: string;
-    change_kind: string;
-    before_json: string | null;
-    after_json: string | null;
-  };
   type Audit = { id: number; ts: string; actor: string; action: string; result: string };
 
   let { lang }: { lang: Lang } = $props();
-  let changes = $state<Change[]>([]);
+  let changes = $state<ChangeRow[]>([]);
+  let apps = $state<AppModel[]>([]);
   let audit = $state<Audit[]>([]);
   let intact = $state(true);
   let since = $state<string | null>(null);
@@ -30,42 +26,35 @@
   });
 
   const rows = $derived.by(() => {
-    const server = changes.map((row) => ({
-      id: `${row.entity_kind}:${row.entity_key}:${row.change_kind}`,
-      origin: "server" as const,
-      text: `${label(row.change_kind)} · ${row.entity_key}`,
-      when: since ?? "",
-      before: row.before_json,
-      after: row.after_json,
-      app: row.entity_key,
-    }));
+    const server = changes.map((row) => {
+      const titled = eventTitle(lang, row);
+      return {
+        id: `${row.entity_kind}:${row.entity_key}:${row.change_kind}`,
+        origin: "server" as const,
+        text: titled.title,
+        idLine: titled.idLine,
+        fields: changedFields(row),
+        when: since ?? "",
+        app: row,
+      };
+    });
     const panel = audit.map((row) => ({
       id: String(row.id),
       origin: "panel" as const,
       text: `${row.actor} · ${row.action}`,
+      idLine: "",
+      fields: [] as { key: string; before: string; after: string }[],
       when: row.ts,
-      before: null as string | null,
-      after: row.result,
-      app: "",
+      app: null,
     }));
+    const chosen = apps.find((item) => item.id === appFilter);
     return [...server, ...panel].filter((row) => {
       if (mode === "server" && row.origin !== "server") return false;
       if (mode === "panel" && row.origin !== "panel") return false;
-      if (appFilter && row.origin === "server" && !row.app.includes(appFilter)) return false;
+      if (appFilter && row.origin === "server" && row.app && !eventMatchesApp(row.app, chosen ?? { containers: [], services: [], ports: [] })) return false;
       return true;
     });
   });
-
-  function label(kind: string): string {
-    const map: Record<string, CopyKey> = {
-      added: "changeAddedPhrase",
-      removed: "changeRemovedPhrase",
-      changed: "changeChangedPhrase",
-      modified: "changeChangedPhrase",
-    };
-    const key = map[kind];
-    return key ? copy(lang, key) : kind;
-  }
 
   function download(): void {
     const header = "origin,text,when\n";
@@ -83,9 +72,10 @@
     void loadPanel()
       .then((body) => {
         since = body.collectedAt;
+        apps = body.apps;
       })
       .catch(() => undefined);
-    void api<{ changes: Change[] }>("/api/v1/changes")
+    void api<{ changes: ChangeRow[] }>("/api/v1/changes")
       .then((body) => {
         changes = body.changes;
       })
@@ -128,12 +118,22 @@
       {#each rows as row (row.id)}
         <li>
           <button type="button" class="flex w-full flex-wrap items-baseline justify-between gap-2 py-3 text-left" onclick={() => (open = open === row.id ? "" : row.id)}>
-            <span class="text-paper">{row.text}</span>
+            <span>
+              <span class="text-paper">{row.text}</span>
+              {#if row.idLine}<span class="mono block text-fog">{row.idLine}</span>{/if}
+            </span>
             <span class="kicker">{row.origin === "server" ? copy(lang, "onHost") : copy(lang, "inPanel")} · {formatWhen(row.when, lang) || copy(lang, "detectedAt")}</span>
           </button>
           {#if open === row.id}
-            <p class="kicker mb-3">{copy(lang, "wasBecame")}</p>
-            <pre class="mono mb-3 whitespace-pre-wrap text-fog">{row.before ?? "—"} → {row.after ?? "—"}</pre>
+            {#if row.fields.length > 0}
+              <ul class="mb-3 space-y-1">
+                {#each row.fields as field (`${field.key}`)}
+                  <li class="text-sm text-fog">{field.key}: {field.before || "—"} → {field.after || "—"}</li>
+                {/each}
+              </ul>
+            {:else}
+              <p class="kicker mb-3">{copy(lang, "wasBecame")}</p>
+            {/if}
           {/if}
         </li>
       {/each}

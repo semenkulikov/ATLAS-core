@@ -49,6 +49,7 @@ _SOCKET_ARGV = {
     ("nsenter", "-t", "1", "-n", "ss", "-lntup"),
 }
 _PROJECT_PATH = re.compile(r"^/(?:root|opt|srv|home|var/www)/[A-Za-z0-9._/-]{1,240}$")
+_CONTAINER_ID = re.compile(r"^[0-9a-fA-F]{12,64}$")
 _SUDOERS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _HOME_KEYS = re.compile(r"^/(?:root|home/[a-z_][a-z0-9_-]{0,31})/\.ssh/authorized_keys$")
 _SSHD_DROPIN = re.compile(r"^/etc/ssh/sshd_config\.d/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -163,7 +164,16 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
         target = params.get("path")
         if not isinstance(target, str) or not project_path(target):
             raise ProtocolError("That project path is not on the read whitelist.")
-        return Plan(op, (), "low", target)
+        anchor = params.get("anchor", "")
+        if not isinstance(anchor, str) or "\x00" in anchor or len(anchor) > 4000:
+            raise ProtocolError("The anchor text is not usable.")
+        return Plan(op, (anchor,), "low", target)
+    if op == "read.logs":
+        container_id = _token(params.get("id"), _CONTAINER_ID, "container id")
+        tail = params.get("tail", 200)
+        if isinstance(tail, bool) or not isinstance(tail, int) or not 1 <= tail <= 500:
+            raise ProtocolError("The log tail is not usable.")
+        return Plan(op, (str(tail),), "low", container_id)
     if op == "read.dir":
         target = params.get("path")
         if not isinstance(target, str) or not readable_dir(target):

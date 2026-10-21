@@ -111,7 +111,8 @@ export async function loadPanel(): Promise<PanelData> {
       diskFree = numberOrNull(root.available_bytes);
     }
   }
-  const linked = linkInventory(groupProjects(projects, readManual()), { services, containers, ports, schedules });
+  const sites = host.passport?.site ?? [];
+  const linked = linkInventory(groupProjects(projects, readManual()), { services, containers, ports, schedules }, sites);
   refreshedAt.set(Date.now());
   return {
     hostname: textOf(identity.hostname),
@@ -129,7 +130,7 @@ export async function loadPanel(): Promise<PanelData> {
     ip: primaryAddress(network),
     sshd,
     sessions: textOf(payloadOf(host.passport?.sessions).text),
-    sites: host.passport?.site ?? [],
+    sites,
     sourceCount: host.sources.length,
     collectedAt: host.collected_at,
     apps: linked.apps,

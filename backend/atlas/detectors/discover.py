@@ -18,7 +18,9 @@ from atlas.detectors.rules import apply_rules, hits_to_facts, requirement_versio
 from atlas.domain import (
     CollectorResult,
     Entity,
+    Evidence,
     Fact,
+    api_evidence,
     command_evidence,
     fact,
     file_evidence,
@@ -97,7 +99,7 @@ def discover(view: HostView, results: list[CollectorResult]) -> Discovery:
         root = find_root(view, directory)
         borrowed: dict[str, object] | None = None
         if root is None and view.helper_socket:
-            borrowed = _borrow_project(view.helper_socket, directory)
+            borrowed = _borrow_project(view.helper_socket, directory, anchor_text)
             raw_root = borrowed.get("root") if borrowed else None
             root = raw_root if isinstance(raw_root, str) and raw_root.startswith("/") else None
         if root is None:
@@ -117,7 +119,7 @@ def discover(view: HostView, results: list[CollectorResult]) -> Discovery:
             project_docs = _index_docs(view, root, fingerprint)
             stack = [hit.value for hit in hits]
         else:
-            project_facts = []
+            project_facts = _facts_from_borrow(borrowed, subject, view.now)
             project_docs = _docs_from_borrow(borrowed, fingerprint)
             stack_raw = borrowed.get("stack")
             stack = [str(item) for item in stack_raw] if isinstance(stack_raw, list) else []
@@ -155,23 +157,86 @@ def discover(view: HostView, results: list[CollectorResult]) -> Discovery:
     return Discovery(tuple(facts), tuple(projects), tuple(edges), tuple(docs))
 
 
-def project_snapshot(view: HostView, root: str) -> dict[str, object]:
+def project_snapshot(view: HostView, root: str, anchor_text: str = "") -> dict[str, object]:
     """Describe one project the helper can read and the panel user cannot."""
-    hits = apply_rules(view, root, "", view.now)
+    subject = "project:snapshot"
+    hits = apply_rules(view, root, anchor_text, view.now)
+    project_facts = hits_to_facts(subject, hits, view.now)
+    project_facts.extend(_version_facts(view, root, subject))
+    project_facts.extend(_compose_services(view, root, subject))
+    project_facts.extend(_git_facts(view, root, subject))
     docs: list[dict[str, object]] = []
     for doc in _index_docs(view, root, "")[:40]:
         body = doc.get("body")
         if isinstance(body, str) and len(body) > 80_000:
             doc = {**doc, "body": body[:80_000]}
         docs.append(doc)
-    return {"root": root, "stack": [hit.value for hit in hits], "docs": docs}
+    return {
+        "root": root,
+        "stack": [hit.value for hit in hits],
+        "docs": docs,
+        "facts": [_export_fact(item) for item in project_facts],
+    }
 
 
-def _borrow_project(socket_path: str, start: str) -> dict[str, object] | None:
+def _export_fact(item: Fact) -> dict[str, object]:
+    proof = item.evidence[0] if item.evidence else None
+    return {
+        "predicate": item.predicate,
+        "value": item.value,
+        "certainty": item.certainty.value,
+        "rule": item.rule or "",
+        "ref": proof.ref if proof else "",
+        "excerpt": proof.excerpt if proof else "",
+        "evidence_kind": proof.kind.value if proof else "",
+    }
+
+
+def _facts_from_borrow(borrowed: dict[str, object], subject: str, when: datetime) -> list[Fact]:
+    raw = borrowed.get("facts")
+    if not isinstance(raw, list):
+        return []
+    facts: list[Fact] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        predicate = item.get("predicate")
+        value = item.get("value")
+        if not isinstance(predicate, str) or not isinstance(value, str) or not predicate:
+            continue
+        if str(item.get("certainty") or "") == "unknown":
+            facts.append(unknown(subject, predicate, value, collected_at=when))
+            continue
+        proof = _evidence_from_record(item, when)
+        if proof is None:
+            continue
+        rule = item.get("rule")
+        rule_name = rule if isinstance(rule, str) and rule else None
+        facts.append(fact(subject, predicate, value, [proof], collected_at=when, rule=rule_name))
+    return facts
+
+
+def _evidence_from_record(record: dict[str, object], when: datetime) -> Evidence | None:
+    kind = str(record.get("evidence_kind") or "")
+    ref = record.get("ref")
+    excerpt_text = record.get("excerpt")
+    if not isinstance(ref, str) or not ref:
+        return None
+    quote = excerpt_text if isinstance(excerpt_text, str) and excerpt_text else ref
+    if kind == "file":
+        path, _, line_text = ref.rpartition(":")
+        line = int(line_text) if line_text.isdigit() else 1
+        return file_evidence(path or ref, line, quote, sha256=None, collected_at=when)
+    if kind == "api":
+        return api_evidence(ref, quote, collected_at=when)
+    return command_evidence(ref.split() or ["anchor"], quote, collected_at=when)
+
+
+def _borrow_project(socket_path: str, start: str, anchor: str = "") -> dict[str, object] | None:
     from atlas.helper.client import read_project
 
     try:
-        answer = read_project(socket_path, start)
+        answer = read_project(socket_path, start, anchor)
     except (OSError, ValueError):
         return None
     project = answer.get("project")

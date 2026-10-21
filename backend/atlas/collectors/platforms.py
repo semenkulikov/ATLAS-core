@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -271,6 +272,40 @@ class ContainerCollector:
                     {"name": item["Name"], "mountpoint": item.get("Mountpoint")},
                 )
         return bag.freeze()
+
+
+_CONTAINER_ID = re.compile(r"^[0-9a-fA-F]{12,64}$")
+
+
+def decode_docker_stream(data: bytes) -> str:
+    """Turn a multiplexed Docker log frame into text. Plain text passes through."""
+    if len(data) < 8 or data[0] not in {0, 1, 2}:
+        return data.decode("utf-8", "replace")
+    chunks: list[bytes] = []
+    offset = 0
+    while offset + 8 <= len(data):
+        size = int.from_bytes(data[offset + 4 : offset + 8], "big")
+        if size <= 0 or offset + 8 + size > len(data):
+            break
+        chunks.append(data[offset + 8 : offset + 8 + size])
+        offset += 8 + size
+    if not chunks:
+        return data.decode("utf-8", "replace")
+    return b"".join(chunks).decode("utf-8", "replace")
+
+
+def container_logs(sock: Path, container_id: str, tail: int) -> str:
+    """Read the tail of one container log. The id is hexadecimal and comes from a scan."""
+    if _CONTAINER_ID.fullmatch(container_id) is None:
+        raise ValueError("container id is not usable")
+    if not isinstance(tail, int) or isinstance(tail, bool) or not 1 <= tail <= 500:
+        raise ValueError("log tail is not usable")
+    route = f"/containers/{container_id}/logs?stdout=1&stderr=1&tail={tail}"
+    transport = httpx.HTTPTransport(uds=str(sock))
+    with httpx.Client(transport=transport, base_url="http://docker", timeout=8.0) as client:
+        response = client.get(route)
+        response.raise_for_status()
+        return decode_docker_stream(response.content)
 
 
 def engine_get(sock: Path, path: str) -> Any:

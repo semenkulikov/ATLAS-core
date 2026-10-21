@@ -3,7 +3,9 @@
   import ActionDialog from "./ActionDialog.svelte";
   import { portList, requestChains, statusLabel, statusTone, type AppModel } from "./apps";
   import { api, shownError, type Fact } from "./api";
+  import { changedFields, eventMatchesApp, eventTitle, type ChangeRow } from "./events";
   import { formatCount, readmeLead, textOf } from "./format";
+  import { renderMarkdown } from "./markdown";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, readManual, writeManual, type PanelData } from "./inventory";
   import { selectedApp } from "./selection";
@@ -23,10 +25,18 @@
   let docs = $state<Array<Record<string, unknown>>>([]);
   let facts = $state<Fact[]>([]);
   let openMenu = $state("");
+  let changes = $state<ChangeRow[]>([]);
   let pending = $state<{ op: string; name: string; risk: "medium" | "high" | "critical" } | null>(null);
   let rename = $state("");
 
   const app = $derived(data?.apps.find((item) => item.id === appId) ?? null);
+  const recent = $derived.by(() => {
+    if (!app) return [];
+    return changes
+      .filter((row) => eventMatchesApp(row, app))
+      .slice(0, 5)
+      .map((row) => ({ row, title: eventTitle(lang, row), fields: changedFields(row).slice(0, 3) }));
+  });
   const stacks = $derived([...(data ? new Set(data.apps.flatMap((item) => item.stack)) : [])]);
   const visible = $derived(
     (data?.apps ?? []).filter((item) => {
@@ -50,7 +60,12 @@
 
   async function load(): Promise<void> {
     try {
-      data = await loadPanel();
+      const [panel, history] = await Promise.all([
+        loadPanel(),
+        api<{ changes: ChangeRow[] }>("/api/v1/changes").catch(() => ({ changes: [] as ChangeRow[] })),
+      ]);
+      data = panel;
+      changes = history.changes;
       errorMessage = "";
     } catch (error) {
       errorMessage = shownError(error, lang);
@@ -61,6 +76,30 @@
     technical = localStorage.getItem("atlas.raw") === "1";
     void load();
   });
+
+  $effect(() => {
+    if (!openMenu) return;
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-row-menu]")) return;
+      openMenu = "";
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") openMenu = "";
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
+
+  function openLogs(): void {
+    if (app) selectedApp.set(app.id);
+    location.hash = "#/logs";
+  }
 
   $effect(() => {
     const current = app;
@@ -222,7 +261,7 @@
         {/if}
       </div>
       <div class="flex flex-wrap gap-2">
-        <a class="btn btn-secondary" href="#/logs" onclick={() => selectedApp.set(app.id)}>{copy(lang, "logsLink")}</a>
+        <a class="btn btn-secondary" href="#/logs" onclick={openLogs}>{copy(lang, "logsLink")}</a>
         <button
           type="button"
           class="btn btn-danger"
@@ -268,7 +307,21 @@
         {/if}
         <article class="card">
           <h2 class="block-title mb-3">{copy(lang, "recentEvents")}</h2>
-          <p class="text-sm text-fog">{copy(lang, "eventsEmpty")}</p>
+          {#if recent.length === 0}
+            <p class="text-sm text-fog">{copy(lang, "eventsEmpty")}</p>
+          {:else}
+            <ul>
+              {#each recent as item (`${item.row.entity_kind}:${item.row.entity_key}:${item.row.change_kind}`)}
+                <li class="py-2">
+                  <p class="text-paper">{item.title.title}</p>
+                  {#if item.title.idLine}<p class="mono text-fog">{item.title.idLine}</p>{/if}
+                  {#each item.fields as field (`${field.key}`)}
+                    <p class="text-sm text-fog">{field.key}: {field.before || "—"} → {field.after || "—"}</p>
+                  {/each}
+                </li>
+              {/each}
+            </ul>
+          {/if}
           <a class="mt-2 inline-block text-sm text-info" href="#/events">{copy(lang, "events")}</a>
         </article>
         <article class="card">
@@ -299,11 +352,11 @@
                   <td class="mono text-paper">{textOf(row.payload.name) || row.key}</td>
                   <td>{textOf(row.payload.description) || textOf(row.payload.image) || copy(lang, "noDescription")}</td>
                   <td>{textOf(row.payload.state) || textOf(row.payload["unit.active"]) || textOf(row.payload.command)}</td>
-                  <td class="relative">
+                  <td class="relative" data-row-menu>
                     <button type="button" class="btn btn-ghost" onclick={() => (openMenu = openMenu === row.key ? "" : row.key)}>{copy(lang, "rowMenu")}</button>
                     {#if openMenu === row.key}
                       <div class="menu">
-                        <button type="button" class="btn btn-ghost w-full justify-start" onclick={() => (location.hash = "#/logs")}>{copy(lang, "logsOf")}</button>
+                        <button type="button" class="btn btn-ghost w-full justify-start" onclick={openLogs}>{copy(lang, "logsOf")}</button>
                         {#if canAct && group.title !== "schedulesWord"}
                           <button type="button" class="btn btn-ghost w-full justify-start" onclick={() => (pending = { op: group.title === "containersWord" ? "container.restart" : "service.restart", name: textOf(row.payload.name) || row.key, risk: "high" })}>{copy(lang, "restartOne")}</button>
                         {/if}
@@ -340,7 +393,7 @@
       {#each docs as doc (`${doc.path}`)}
         <article class="card mb-3">
           <p class="mono text-info">{doc.path}</p>
-          <pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs">{doc.body}</pre>
+          <div class="doc mt-2 max-h-96 overflow-auto text-sm">{@html renderMarkdown(String(doc.body ?? ""))}</div>
         </article>
       {:else}
         <p class="text-sm text-fog">{copy(lang, "docsEmpty")}</p>
