@@ -86,9 +86,15 @@ def _tail_text(path: Path, limit: int) -> str:
 def _journal(unit: str, limit: int) -> list[str]:
     if not unit or any(char not in _UNIT for char in unit):
         raise LogError("The unit name is not usable.")
+    # "syslog" is the system journal, not a unit named syslog.
+    argv = (
+        ["journalctl", "--system", "-n", str(limit), "--no-pager", "-o", "cat"]
+        if unit == "syslog"
+        else ["journalctl", "-u", unit, "-n", str(limit), "--no-pager", "-o", "cat"]
+    )
     try:
         completed = subprocess.run(  # nosec B603 B607
-            ["journalctl", "-u", unit, "-n", str(limit), "--no-pager", "-o", "cat"],
+            argv,
             check=False,
             capture_output=True,
             text=True,

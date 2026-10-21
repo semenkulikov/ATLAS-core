@@ -3,7 +3,7 @@
   import "uplot/dist/uPlot.min.css";
   import Chart from "./Chart.svelte";
   import { api, errorDetail, shownError } from "./api";
-  import { formatBytes } from "./format";
+  import { formatBytes, textOf } from "./format";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
   import { selectedApp } from "./selection";
@@ -18,7 +18,16 @@
   let errorMessage = $state("");
   let errorExtra = $state("");
   let socket: WebSocket | null = null;
-  let units = $state<{ name: string; memory_bytes: number | null }[]>([]);
+  type LiveRow = {
+    name: string;
+    memory_bytes: number | null;
+    cpu_usage_usec: number | null;
+    kind: "service" | "container";
+  };
+  let rows = $state<LiveRow[]>([]);
+  let cpuShare = $state<Record<string, number>>({});
+  let lastAt = 0;
+  const lastCpu = new Map<string, number>();
 
   const presets = [
     [900, "period15"],
@@ -29,14 +38,34 @@
 
   const diskName = $derived(names.find((name) => name.includes(".read_bytes")) ?? "");
   const netName = $derived(names.find((name) => name.includes(".rx_bytes")) ?? "");
-  const filteredUnits = $derived.by(() => {
+  const filteredRows = $derived.by(() => {
     const id = $selectedApp;
-    if (!id || !data) return units;
-    const app = data.apps.find((item) => item.id === id);
-    if (!app) return units;
-    const keys = new Set([...app.services.map((row) => row.key), ...app.containers.map((row) => String(row.payload.name))]);
-    return units.filter((unit) => keys.has(unit.name));
+    const app = id && data ? data.apps.find((item) => item.id === id) : undefined;
+    const chosen = app ? rows.filter((row) => belongsTo(row, app)) : rows;
+    return [...chosen].sort((a, b) => (b.memory_bytes ?? -1) - (a.memory_bytes ?? -1)).slice(0, 8);
   });
+
+  function belongsTo(row: LiveRow, app: PanelData["apps"][number] | undefined): boolean {
+    if (!app) return false;
+    if (row.kind === "service") {
+      return app.services.some((item) => item.key === row.name || item.key === `${row.name}.service`);
+    }
+    return app.containers.some((item) => textOf(item.payload.name) === row.name || textOf(item.payload.id).startsWith(row.name));
+  }
+
+  function rowLabel(row: LiveRow): string {
+    if (row.kind === "container" && data) {
+      const known = [...data.apps.flatMap((app) => app.containers), ...data.system.containers];
+      const match = known.find((item) => textOf(item.payload.id).startsWith(row.name));
+      const name = match ? textOf(match.payload.name) : "";
+      if (name) return name;
+    }
+    return row.kind === "service" ? `${row.name}.service` : row.name;
+  }
+
+  function rowKey(row: LiveRow): string {
+    return `${row.kind}:${row.name}`;
+  }
 
   onMount(() => {
     void api<{ series: string[] }>("/api/v1/metrics/series")
@@ -65,10 +94,34 @@
       try {
         const body = JSON.parse(String(event.data)) as {
           channel?: string;
-          units?: { name: string; memory_bytes: number | null }[];
+          collected_at?: number;
+          units?: { name: string; memory_bytes: number | null; cpu_usage_usec: number | null }[];
+          containers?: { name: string; memory_bytes: number | null; cpu_usage_usec: number | null }[];
         };
         if (body.channel !== "metrics.live") return;
-        units = body.units ?? [];
+        const incoming: LiveRow[] = [
+          ...(body.units ?? []).map((row) => ({ ...row, kind: "service" as const })),
+          ...(body.containers ?? []).map((row) => ({ ...row, kind: "container" as const })),
+        ];
+        const at = typeof body.collected_at === "number" ? body.collected_at : Date.now() / 1000;
+        const shares: Record<string, number> = {};
+        const elapsed = at - lastAt;
+        if (lastAt > 0 && elapsed > 0) {
+          for (const row of incoming) {
+            const key = `${row.kind}:${row.name}`;
+            const previous = lastCpu.get(key);
+            if (previous !== undefined && row.cpu_usage_usec !== null && row.cpu_usage_usec >= previous) {
+              shares[key] = ((row.cpu_usage_usec - previous) / 1_000_000 / elapsed) * 100;
+            }
+          }
+        }
+        lastAt = at;
+        lastCpu.clear();
+        for (const row of incoming) {
+          if (row.cpu_usage_usec !== null) lastCpu.set(`${row.kind}:${row.name}`, row.cpu_usage_usec);
+        }
+        cpuShare = shares;
+        rows = incoming;
       } catch {
         return;
       }
@@ -127,11 +180,11 @@
         </tr>
       </thead>
       <tbody>
-        {#each filteredUnits as unit (unit.name)}
+        {#each filteredRows as row (rowKey(row))}
           <tr>
-            <td class="mono">{unit.name}</td>
-            <td>— <span class="kicker">{copy(lang, "cpuUnknown")}</span></td>
-            <td>{unit.memory_bytes === null ? "—" : formatBytes(unit.memory_bytes, lang)}</td>
+            <td class="mono">{rowLabel(row)}</td>
+            <td>{cpuShare[rowKey(row)] === undefined ? "—" : `${Math.round(cpuShare[rowKey(row)])}%`}</td>
+            <td>{row.memory_bytes === null ? "—" : formatBytes(row.memory_bytes, lang)}</td>
           </tr>
         {:else}
           <tr><td colspan="3" class="text-fog">{copy(lang, "empty")}</td></tr>

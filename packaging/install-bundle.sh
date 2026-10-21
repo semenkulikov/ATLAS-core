@@ -25,6 +25,11 @@ if ! id atlas >/dev/null 2>&1; then
 else
   uid=$(id -u atlas)
 fi
+# Persistent journals are not world-readable. Membership takes effect on the
+# service restart below; the unit also sets SupplementaryGroups.
+if getent group systemd-journal >/dev/null 2>&1; then
+  usermod -aG systemd-journal atlas
+fi
 
 mkdir -p /opt/atlas/frontend /etc/atlas /var/lib/atlas /usr/lib/systemd/system /usr/lib/tmpfiles.d
 rm -rf /opt/atlas/python /opt/atlas/app /opt/atlas/frontend/dist

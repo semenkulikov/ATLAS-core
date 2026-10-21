@@ -27,4 +27,4 @@ cp /src/packaging/install-bundle.sh "$stage/install.sh"
 chmod 755 "$stage/install.sh" "$stage/packaging/pick-uid.sh" \
   "$stage/packaging/remove-atlas.sh" "$stage/packaging/atlas-cli.sh" \
   "$stage/packaging/apply-update.sh" "$stage/python/bin/python3"
-PYTHONPATH="$stage/app" "$stage/python/bin/python3" -c 'import atlas,fastapi,uvicorn,psutil,pyotp; print(atlas.__version__)'
+PYTHONPATH="$stage/app" "$stage/python/bin/python3" -c 'import atlas,fastapi,uvicorn,websockets,psutil,pyotp; print(atlas.__version__)'

@@ -2,6 +2,12 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.4] - 2026-10-21
+
+### Fixed
+- The panel user joins `systemd-journal`, and the system-journal view reads `journalctl --system` instead of a unit named `syslog`.
+- Monitoring can open its live channel because the release installs `websockets`. "Who is using resources" lists the heaviest services and containers, with a processor share from the last two samples.
+
 ## [1.1.3] - 2026-10-21
 
 ### Fixed

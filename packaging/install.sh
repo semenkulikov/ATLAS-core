@@ -78,6 +78,9 @@ if [ "$prefix" = / ]; then
     useradd --system --uid "$uid" --home-dir /var/lib/atlas --shell "$shell" atlas
   fi
   uid=$(id -u atlas)
+  if getent group systemd-journal >/dev/null 2>&1; then
+    usermod -aG systemd-journal atlas
+  fi
 else
   uid=0
 fi

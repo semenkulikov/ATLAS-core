@@ -133,8 +133,9 @@ def _cpu_from_fields(fields: list[str]) -> CpuTimes | None:
 class ProcMetricsSampler:
     """Read Linux ``/proc`` directly. This is the default hot path."""
 
-    def __init__(self, proc_root: Path | None = None) -> None:
+    def __init__(self, proc_root: Path | None = None, cgroup_root: Path | None = None) -> None:
         self._proc = proc_root or Path("/proc")
+        self._cgroup = cgroup_root or Path("/sys/fs/cgroup")
 
     def sample(self) -> HostSample:
         cpu, cores = self._cpu()
@@ -265,7 +266,7 @@ class ProcMetricsSampler:
         return tuple(rows)
 
     def _cgroups(self) -> tuple[tuple[CgroupSample, ...], tuple[CgroupSample, ...]]:
-        root = Path("/sys/fs/cgroup")
+        root = self._cgroup
         if not root.is_dir():
             return (), ()
         units: list[CgroupSample] = []
@@ -273,7 +274,7 @@ class ProcMetricsSampler:
         slice_dir = root / "system.slice"
         if slice_dir.is_dir():
             try:
-                entries = sorted(slice_dir.iterdir())
+                entries = list(slice_dir.iterdir())
             except OSError:
                 entries = []
             for entry in entries:
@@ -287,16 +288,22 @@ class ProcMetricsSampler:
                     sample = _cgroup_sample("service", name.removesuffix(".service"), entry)
                     if sample is not None:
                         units.append(sample)
-                    if len(units) >= 12:
-                        break
-                if name.startswith("docker-") and name.endswith(".scope"):
+                elif name.startswith("docker-") and name.endswith(".scope"):
                     cid = name.removeprefix("docker-").removesuffix(".scope")[:12]
                     sample = _cgroup_sample("container", cid, entry)
                     if sample is not None:
                         containers.append(sample)
-                    if len(containers) >= 12:
-                        break
-        return tuple(units), tuple(containers)
+        return _heaviest(units), _heaviest(containers)
+
+
+def _heaviest(rows: list[CgroupSample], limit: int = 12) -> tuple[CgroupSample, ...]:
+    """Keep the rows that hold the most memory. A missing reading sorts last."""
+    ranked = sorted(
+        rows,
+        key=lambda row: row.memory_bytes if row.memory_bytes is not None else -1,
+        reverse=True,
+    )
+    return tuple(ranked[:limit])
 
 
 def _cgroup_sample(kind: str, name: str, directory: Path) -> CgroupSample | None:

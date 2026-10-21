@@ -191,6 +191,28 @@ def test_fixture_reads_stay_inside_the_manifest() -> None:
     assert undeclared(view.files_read, view.commands_run) == []
 
 
+def test_system_journal_is_not_a_unit_named_syslog(tmp_path: Path, monkeypatch) -> None:
+    from atlas.application import logs
+
+    seen: list[list[str]] = []
+
+    def fake_run(argv, **_kwargs):
+        seen.append(list(argv))
+
+        class Done:
+            returncode = 0
+            stdout = "kept\n"
+
+        return Done()
+
+    monkeypatch.setattr(logs.subprocess, "run", fake_run)
+    assert logs.read_log(tmp_path, "journal:syslog", 10)["lines"] == ["kept"]
+    assert seen[0][:2] == ["journalctl", "--system"]
+    assert "-u" not in seen[0]
+    logs.read_log(tmp_path, "journal:atlas", 5)
+    assert seen[1][1:3] == ["-u", "atlas"]
+
+
 def test_log_filter_and_certificate_date(tmp_path: Path) -> None:
     import base64
     from datetime import UTC, datetime, timedelta
@@ -323,6 +345,23 @@ def test_oneshot_does_not_install_units(tmp_path: Path) -> None:
     assert (report / "atlas-report.md").is_file()
     assert (report / "atlas-report.json").is_file()
     assert (report / "atlas-report.html").is_file()
+
+
+def test_release_installs_a_websocket_library() -> None:
+    root = Path(__file__).resolve().parents[2]
+    project = (root / "backend" / "pyproject.toml").read_text(encoding="utf-8")
+    script = (root / "packaging" / "build-release.sh").read_text(encoding="utf-8")
+    assert "websockets" in project
+    assert "websockets" in script
+
+
+def test_panel_unit_can_read_the_system_journal() -> None:
+    root = Path(__file__).resolve().parents[2]
+    unit = (root / "packaging" / "atlas.service").read_text(encoding="utf-8")
+    assert "SupplementaryGroups=systemd-journal" in unit
+    for name in ("install.sh", "install-bundle.sh"):
+        script = (root / "packaging" / name).read_text(encoding="utf-8")
+        assert "usermod -aG systemd-journal atlas" in script
 
 
 def _scan(store: Store) -> int:

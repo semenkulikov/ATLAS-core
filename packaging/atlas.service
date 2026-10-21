@@ -6,6 +6,8 @@ After=network.target systemd-tmpfiles-setup.service
 Type=simple
 User=atlas
 Group=atlas
+# Journal files are mode 0640 and owned by root:systemd-journal.
+SupplementaryGroups=systemd-journal
 ExecStartPre=-/bin/rm -f /run/atlas/web.sock
 ExecStart=/opt/atlas/.venv/bin/atlas serve --db /var/lib/atlas/atlas.db --root / --helper-socket /run/atlas/helper.sock
 RuntimeDirectory=atlas

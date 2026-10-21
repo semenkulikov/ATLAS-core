@@ -76,7 +76,7 @@ build_host() {
     --implementation cp \
     --abi cp312 \
     --only-binary=:all: \
-    argon2-cffi fastapi httpx psutil pydantic pyotp pyyaml uvicorn
+    argon2-cffi fastapi httpx psutil pydantic pyotp pyyaml uvicorn websockets
   "$host_py" -m pip install -q --target "$stage/app" --no-deps --no-index \
     --find-links "$wheelhouse" atlas
   rm -rf "$wheelhouse"

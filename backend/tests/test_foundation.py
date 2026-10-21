@@ -68,6 +68,28 @@ def test_proc_sampler_survives_missing_and_garbage(tmp_path: Path) -> None:
     assert ProcMetricsSampler(proc).sample().cpu is None
 
 
+def test_cgroup_rows_are_the_heaviest_not_the_first_names(tmp_path: Path) -> None:
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "stat").write_text("cpu  1 0 0 1 0 0 0 0\n", encoding="utf-8")
+    (proc / "meminfo").write_text("MemTotal: 1024 kB\nMemAvailable: 512 kB\n", encoding="utf-8")
+    cgroup = tmp_path / "cgroup" / "system.slice"
+    for name, memory in (("aaa.service", "10\n"), ("zzz.service", "5000\n")):
+        directory = cgroup / name
+        directory.mkdir(parents=True)
+        (directory / "memory.current").write_text(memory, encoding="utf-8")
+    box = cgroup / "docker-abcdef1234567890.scope"
+    box.mkdir()
+    (box / "memory.current").write_text("9000\n", encoding="utf-8")
+
+    sample = ProcMetricsSampler(proc, cgroup_root=tmp_path / "cgroup").sample()
+
+    assert [row.name for row in sample.units] == ["zzz", "aaa"]
+    assert sample.units[0].memory_bytes == 5000
+    assert sample.containers[0].name == "abcdef123456"
+    assert sample.containers[0].memory_bytes == 9000
+
+
 def test_default_sampler_returns_a_memory_reading() -> None:
     sample = default_sampler().sample()
     assert sample.source in {"proc", "psutil"}
