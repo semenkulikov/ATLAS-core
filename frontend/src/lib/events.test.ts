@@ -14,6 +14,25 @@ describe("event titles", () => {
     expect(titled.idLine).toBe("");
   });
 
+  it("reads the name from the object the API returns", () => {
+    const titled = eventTitle("ru", {
+      entity_kind: "container",
+      entity_key: "b".repeat(64),
+      change_kind: "modified",
+      after: { name: "ledger", id: "b".repeat(64), state: "running" },
+      before: { name: "ledger", id: "b".repeat(64), state: "exited" },
+    });
+    expect(titled.title).toBe("Изменился контейнер ledger");
+    expect(titled.idLine).toBe("");
+    expect(changedFields({
+      entity_kind: "container",
+      entity_key: "b".repeat(64),
+      change_kind: "modified",
+      after: { name: "ledger", state: "running" },
+      before: { name: "ledger", state: "exited" },
+    })).toEqual([{ key: "state", before: "exited", after: "running" }]);
+  });
+
   it("keeps the id on a second line when the payload has no name", () => {
     const titled = eventTitle("ru", {
       entity_kind: "service",

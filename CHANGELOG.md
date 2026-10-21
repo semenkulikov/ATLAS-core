@@ -2,6 +2,11 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.6] - 2026-10-21
+
+### Fixed
+- An event title reads the name from the scan object the API already returns. A container is no longer labeled with its id when that object has a name.
+
 ## [1.1.5] - 2026-10-21
 
 ### Fixed

@@ -7,8 +7,10 @@ export type ChangeRow = {
   entity_kind: string;
   entity_key: string;
   change_kind: string;
-  before_json: string | null;
-  after_json: string | null;
+  before_json?: string | null;
+  after_json?: string | null;
+  before?: unknown;
+  after?: unknown;
 };
 
 export type FieldChange = { key: string; before: string; after: string };
@@ -31,19 +33,27 @@ const fallback: Record<Lang, Record<string, string>> = {
   en: { added: "Appeared", modified: "Changed", removed: "Removed" },
 };
 
-function readObject(raw: string | null): Record<string, unknown> {
+function readObject(raw: unknown): Record<string, unknown> {
   if (!raw) return {};
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    return value as Record<string, unknown>;
-  } catch {
-    return {};
+  if (typeof raw === "string") {
+    try {
+      return readObject(JSON.parse(raw) as unknown);
+    } catch {
+      return {};
+    }
   }
+  if (typeof raw !== "object" || Array.isArray(raw)) return {};
+  return raw as Record<string, unknown>;
 }
 
-function objectName(raw: string | null): string {
-  const name = readObject(raw).name;
+function side(row: ChangeRow, which: "before" | "after"): Record<string, unknown> {
+  const direct = which === "before" ? row.before : row.after;
+  if (direct && typeof direct === "object") return readObject(direct);
+  return readObject(which === "before" ? row.before_json : row.after_json);
+}
+
+function objectName(row: ChangeRow): string {
+  const name = side(row, "after").name || side(row, "before").name;
   return typeof name === "string" ? name.trim() : "";
 }
 
@@ -55,7 +65,7 @@ function brief(value: unknown): string {
 
 export function eventTitle(lang: Lang, row: ChangeRow): { title: string; idLine: string } {
   const kind = row.change_kind === "changed" ? "modified" : row.change_kind;
-  const name = objectName(row.after_json) || objectName(row.before_json);
+  const name = objectName(row);
   const specific = sentences[lang][row.entity_kind]?.[kind];
   const lead = specific ?? fallback[lang][kind] ?? fallback[lang].modified;
   if (!name) return { title: lead, idLine: row.entity_key };
@@ -63,8 +73,8 @@ export function eventTitle(lang: Lang, row: ChangeRow): { title: string; idLine:
 }
 
 export function changedFields(row: ChangeRow): FieldChange[] {
-  const before = readObject(row.before_json);
-  const after = readObject(row.after_json);
+  const before = side(row, "before");
+  const after = side(row, "after");
   const skip = new Set(["id", "Id", "name"]);
   const found: FieldChange[] = [];
   for (const key of [...new Set([...Object.keys(before), ...Object.keys(after)])]) {
