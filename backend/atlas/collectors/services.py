@@ -23,6 +23,8 @@ from atlas.redact import mask_secrets
 
 SYSTEMCTL_SERVICES = ["systemctl", "show", "--type=service", "--all", "--no-pager"]
 SYSTEMCTL_TIMERS = ["systemctl", "show", "--type=timer", "--all", "--no-pager"]
+SYSTEMCTL_SOCKETS = ["systemctl", "show", "--type=socket", "--all", "--no-pager"]
+LISTENER_ARGV = ["nsenter", "-t", "1", "-n", "ss", "-lntup"]
 _UNIT_DIRS = ("/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system")
 
 
@@ -66,6 +68,13 @@ class SystemdCollector:
             "Runtime state of timers.",
             "Состояние таймеров во время работы.",
         ),
+        declare(
+            "systemd",
+            "command",
+            "systemctl show --type=socket",
+            "Runtime state of sockets.",
+            "Состояние сокетов, которые поднимают службы.",
+        ),
     )
 
     def collect(self, view: HostView) -> CollectorResult:
@@ -73,12 +82,13 @@ class SystemdCollector:
         files = _unit_files(view, bag)
         shown = _systemctl(view, bag, SYSTEMCTL_SERVICES)
         shown.update(_systemctl(view, bag, SYSTEMCTL_TIMERS))
+        shown.update(_systemctl(view, bag, SYSTEMCTL_SOCKETS))
         names = set(files) | set(shown)
         if not names:
             bag.add_unknown("host", "systemd", "no unit files and systemctl produced no output")
             return bag.freeze()
         for name in sorted(names):
-            if name.endswith((".service", ".timer")):
+            if name.endswith((".service", ".timer", ".socket")):
                 _emit_unit(bag, name, files.get(name), shown.get(name))
         return bag.freeze()
 
@@ -260,7 +270,7 @@ def _unit_files(view: HostView, bag: Bag) -> dict[str, tuple[str, UnitFile, str 
     count = 0
     for directory in _UNIT_DIRS:
         for logical in files_under(view, directory, limit=4000):
-            if not logical.endswith((".service", ".timer")):
+            if not logical.endswith((".service", ".timer", ".socket")):
                 continue
             count += 1
             if count > 4000:
@@ -291,7 +301,12 @@ def _emit_unit(
     runtime: dict[str, str] | None,
 ) -> None:
     subject = f"unit:{name}"
-    kind = "timer" if name.endswith(".timer") else "service"
+    if name.endswith(".timer"):
+        kind = "timer"
+    elif name.endswith(".socket"):
+        kind = "socket"
+    else:
+        kind = "service"
     payload: dict[str, object] = {"unit": name, "kind": kind}
     if file_info is not None:
         logical, parsed, digest = file_info
@@ -315,7 +330,12 @@ def _emit_unit(
             payload["description"] = runtime["Description"]
     elif file_info is not None:
         bag.add_unknown(subject, "unit.active", "systemctl is not available")
-    entity_kind = "schedule" if kind == "timer" else "service"
+    if kind == "timer":
+        entity_kind = "schedule"
+    elif kind == "socket":
+        entity_kind = "socket"
+    else:
+        entity_kind = "service"
     bag.entity(entity_kind, name, payload)
 
 
@@ -390,7 +410,7 @@ def _listener_names(bag: Bag, view: HostView) -> dict[tuple[str, str, int], tupl
     """Ask the helper for process names when socket inodes are hidden."""
     if not view.helper_socket:
         return {}
-    result = bag.privileged(view, ["ss", "-lntup"])
+    result = bag.privileged(view, LISTENER_ARGV)
     if not result.stdout:
         return {}
     return parse_ss_listeners(result.stdout)
@@ -449,7 +469,7 @@ def _emit_port(
     elif hinted is not None:
         hinted_pid, hinted_comm = hinted
         bag.add_command(
-            subject, "port.process", f"{hinted_pid} {hinted_comm}", ["ss", "-lntup"], hinted_comm
+            subject, "port.process", f"{hinted_pid} {hinted_comm}", LISTENER_ARGV, hinted_comm
         )
         payload["process"] = {"pid": hinted_pid, "comm": hinted_comm, "cmdline": hinted_comm}
     else:

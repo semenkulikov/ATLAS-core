@@ -298,6 +298,12 @@ select {
   border-color: #5c6168;
 }
 
+@media (min-width: 768px) {
+  .topbar .search-icon {
+    display: none;
+  }
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -473,11 +479,22 @@ select {
 }
 
 .palette {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  align-items: start;
+  justify-content: center;
+  padding: 96px 16px 16px;
   background: #08090a;
 }
 
 .palette-card {
-  background: var(--color-obsidian);
+  width: min(32rem, 100%);
+  padding: 16px;
+  border: 1px solid var(--color-smoke);
+  border-radius: 12px;
+  background: #161718;
 }
 
 .toast {

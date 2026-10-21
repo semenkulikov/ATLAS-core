@@ -7,6 +7,7 @@ from pathlib import Path
 
 from atlas.application.report import build_report, render_html, render_json, render_markdown
 from atlas.application.scan import run_scan
+from atlas.collectors.host import SshCollector
 from atlas.collectors.platforms import engine_get
 from atlas.collectors.registry import declarations
 from atlas.collectors.view import open_view
@@ -115,6 +116,20 @@ def test_engine_get_refuses_unlisted_paths() -> None:
         assert "allowlisted" in str(exc)
     else:
         raise AssertionError("unlisted engine path was accepted")
+
+
+def test_sshd_without_a_port_line_uses_the_default(tmp_path: Path) -> None:
+    root = tmp_path / "host"
+    config = root / "etc" / "ssh"
+    config.mkdir(parents=True)
+    (config / "sshd_config").write_text("PermitRootLogin no\n", encoding="utf-8")
+    result = SshCollector().collect(open_view(root))
+    port = next(item for item in result.facts if item.predicate == "sshd.port")
+    assert port.value == "22"
+    assert port.certainty.value == "derived"
+    assert port.rule == "sshd.default-port"
+    entity = next(item for item in result.entities if item.kind == "sshd")
+    assert entity.payload["port"] == "22"
 
 
 def test_package_does_not_invoke_a_shell() -> None:

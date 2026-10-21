@@ -46,7 +46,7 @@ _FIREWALL_ARGV = {
     ("firewall-cmd", "--list-all"),
 }
 _SOCKET_ARGV = {
-    ("ss", "-lntup"),
+    ("nsenter", "-t", "1", "-n", "ss", "-lntup"),
 }
 _PROJECT_PATH = re.compile(r"^/(?:root|opt|srv|home|var/www)/[A-Za-z0-9._/-]{1,240}$")
 _SUDOERS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")

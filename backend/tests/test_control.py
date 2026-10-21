@@ -61,8 +61,12 @@ def test_whitelist_refuses_a_protected_unit_and_a_shell_character() -> None:
     remove = build_plan("container.remove", {"name": "atlas-probe", "force": True})
     assert remove.argv == ("docker", "rm", "--force", "atlas-probe")
     listed = build_plan("read.dir", {"path": "/etc/sudoers.d"})
-    sockets = build_plan("read.command", {"argv": ["ss", "-lntup"]})
-    assert sockets.argv == ("ss", "-lntup")
+    sockets = build_plan("read.command", {"argv": ["nsenter", "-t", "1", "-n", "ss", "-lntup"]})
+    assert sockets.argv == ("nsenter", "-t", "1", "-n", "ss", "-lntup")
+    with pytest.raises(ProtocolError):
+        build_plan("read.command", {"argv": ["ss", "-lntup"]})
+    with pytest.raises(ProtocolError):
+        build_plan("read.command", {"argv": ["nsenter", "-t", "2", "-n", "ss", "-lntup"]})
     project = build_plan("read.project", {"path": "/root/session_bot/main.py"})
     assert project.confirm == "/root/session_bot/main.py"
     with pytest.raises(ProtocolError):
@@ -143,7 +147,7 @@ def test_reboot_risk_names_containers_and_keeps_ssh_when_its_socket_is_on(tmp_pa
     store._insert_entity(
         scan_id,
         Entity(
-            "service",
+            "socket",
             "ssh.socket",
             {"unit.active": "active", "unit.enabled": "enabled"},
         ),
@@ -159,6 +163,7 @@ def test_reboot_risk_names_containers_and_keeps_ssh_when_its_socket_is_on(tmp_pa
     store.finish_scan(scan_id, "succeeded")
     risks = restart_risks(store)
     assert all(item["name"] != "ssh.service" for item in risks)
+    assert all(item["name"] != "ssh.socket" for item in risks)
     assert {"kind": "container", "name": "remnawave", "enabled": "no"} in risks
     store.close()
 

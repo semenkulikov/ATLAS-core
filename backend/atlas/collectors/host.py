@@ -808,20 +808,33 @@ def _sshd(view: HostView, bag: Bag) -> None:
         ("pubkeyauthentication", "sshd.pubkey_authentication"),
     ):
         if key not in merged:
+            if key == "port":
+                source = next(iter(merged.values()), None)
+                cited = source[2] if source is not None else files[0]
+                bag.add_file(
+                    "host",
+                    predicate,
+                    "22",
+                    cited,
+                    1,
+                    "Port defaults to 22",
+                    None,
+                    rule="sshd.default-port",
+                )
+                continue
             bag.add_unknown("host", predicate, f"{key} is not set in sshd_config")
             continue
         value, line, path = merged[key]
         bag.add_file("host", predicate, value, path, line, f"{key} {value}", None)
-    bag.entity(
-        "sshd",
-        "config",
-        {
-            predicate: merged[key][0]
-            for key, predicate in (
-                ("port", "port"),
-                ("permitrootlogin", "permit_root_login"),
-                ("passwordauthentication", "password_authentication"),
-            )
-            if key in merged
-        },
-    )
+    payload: dict[str, object] = {
+        predicate: merged[key][0]
+        for key, predicate in (
+            ("port", "port"),
+            ("permitrootlogin", "permit_root_login"),
+            ("passwordauthentication", "password_authentication"),
+        )
+        if key in merged
+    }
+    if "port" not in merged:
+        payload["port"] = "22"
+    bag.entity("sshd", "config", payload)

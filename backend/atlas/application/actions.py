@@ -80,7 +80,8 @@ def restart_risks(store: Store) -> list[dict[str, str]]:
         return []
     found: list[dict[str, str]] = []
     services = list(store.entities(scan_id, "service"))
-    by_name = {str(row["key"]): row["payload"] for row in services}
+    sockets = list(store.entities(scan_id, "socket"))
+    by_name = {str(row["key"]): row["payload"] for row in (*services, *sockets)}
     for row in services:
         payload = row["payload"]
         active = payload.get("unit.active")

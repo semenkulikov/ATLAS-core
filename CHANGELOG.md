@@ -2,6 +2,14 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.3] - 2026-10-21
+
+### Fixed
+- Listening ports are named from the host network namespace. The helper stays on its private network and runs `ss` through `nsenter` into pid 1.
+- Socket units are collected. An active `ssh.service` is not listed as failing to return when `ssh.socket` is enabled.
+- SSH port is 22 when `sshd_config` does not set `Port`.
+- The extra search button stays hidden on a wide screen, and the search palette is a solid layer above the page.
+
 ## [1.1.2] - 2026-10-21
 
 ### Fixed

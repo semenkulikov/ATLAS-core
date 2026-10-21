@@ -64,6 +64,15 @@
     (panel?.apps ?? []).filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase())),
   );
 
+  function portal(node: HTMLElement): { destroy: () => void } {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
+  }
+
   function go(id: RouteId): void {
     location.hash = id === "system" ? "#/system/services" : `#/${id}`;
     palette = false;
@@ -204,7 +213,7 @@
         {copy(lang, "searchPlaceholder")}
       </button>
       <div class="flex items-center justify-end gap-2">
-        <button type="button" class="btn btn-ghost md:hidden" onclick={() => (palette = true)} aria-label={copy(lang, "search")}>
+        <button type="button" class="search-icon btn btn-ghost" onclick={() => (palette = true)} aria-label={copy(lang, "search")}>
           <Icon name="search" />
         </button>
         <span class="hidden items-center gap-2 sm:inline-flex">
@@ -282,8 +291,8 @@
 {/if}
 
 {#if palette}
-  <div class="palette atlas-backdrop-in fixed inset-0 z-50 grid place-items-start px-4 pt-24" role="dialog" aria-modal="true" aria-label={copy(lang, "search")}>
-    <div class="card palette-card mx-auto w-full max-w-lg">
+  <div class="palette" use:portal role="dialog" aria-modal="true" aria-label={copy(lang, "search")}>
+    <div class="palette-card">
       <input class="h-10 w-full rounded-md border border-smoke bg-void px-3" bind:value={query} placeholder={copy(lang, "searchPlaceholder")} />
       <p class="kicker mt-3">{copy(lang, "navLabel")}</p>
       {#each navRoutes.filter((id) => copy(lang, id).toLowerCase().includes(query.toLowerCase())) as id (id)}
