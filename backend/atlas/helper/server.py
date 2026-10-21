@@ -133,6 +133,8 @@ class HelperServer:
             return self._read_file(plan.confirm)
         if plan.op == "read.dir":
             return self._read_dir(plan.confirm)
+        if plan.op == "read.project":
+            return self._read_project(plan.confirm)
         if plan.op == "read.engine":
             route = params.get("path")
             if not isinstance(route, str):
@@ -141,6 +143,16 @@ class HelperServer:
         if plan.delay_seconds:
             return self._schedule(plan)
         return self._run(plan)
+
+    def _read_project(self, start: str) -> dict[str, object]:
+        from atlas.collectors.view import open_view
+        from atlas.detectors.discover import find_root, project_snapshot
+
+        view = open_view(self.keys_root)
+        root = find_root(view, start)
+        if root is None:
+            return {"ok": True, "project": None}
+        return {"ok": True, "project": project_snapshot(view, root)}
 
     def _read_file(self, target: str) -> dict[str, object]:
         if not readable_path(target):

@@ -106,7 +106,7 @@
       <p class="text-paper">{copy(lang, "logsDenied")}</p>
       <p class="mono mt-3">{copy(lang, "commandToCopy")}</p>
       <CopyButton {lang} text={copy(lang, "commandToCopy")} label={copy(lang, "copyCommand")} />
-      {#if detail}<p class="kicker mt-3">{detail}</p>{/if}
+      {#if detail && !detail.includes("logs.source")}<p class="kicker mt-3">{detail}</p>{/if}
     </div>
   {:else if lines.length === 0}
     <div class="card">

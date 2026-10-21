@@ -2,6 +2,17 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.2] - 2026-10-21
+
+### Fixed
+- Overview can start a scan after the first one, so a stale inventory is not stuck on the server.
+- Listening ports name the process through the helper when `/proc` hides the socket inode.
+- A service whose program lives next to a project marker, including one under `/root`, becomes an application.
+- The first README paragraph is shown even when the file starts with blank lines. `requirements.txt` is no longer indexed as a document.
+- IPv4 and IPv6 of the same port share one row. Reboot risks use container names and keep SSH when its socket is enabled.
+- An account with a login shell is not grouped as unable to sign in. `Etc/UTC` is shown as UTC.
+- Memory charts plot memory in use. The CPU chart describes busy time. Counts, timers, logs, and the search palette match the panel language and stay readable on a narrow screen.
+
 ## [1.1.1] - 2026-10-19
 
 ### Fixed

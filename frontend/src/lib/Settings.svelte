@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import ActionDialog from "./ActionDialog.svelte";
   import { api } from "./api";
+  import { zoneName } from "./format";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
 
@@ -159,7 +160,7 @@
       <p class="kicker">{copy(lang, "displayName")}</p>
       <p class="mt-1 text-paper">{data?.hostname || hostname || "—"}</p>
       <p class="kicker mt-3">{copy(lang, "timezoneLabel")}</p>
-      <p class="mt-1">{data?.timezone || copy(lang, "notSet")}</p>
+      <p class="mt-1">{data?.timezone ? zoneName(data.timezone) : copy(lang, "notSet")}</p>
     </div>
     <section class="card">
       <h2 class="block-title">{copy(lang, "dangerZone")}</h2>

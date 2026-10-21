@@ -3,7 +3,7 @@
   import ActionDialog from "./ActionDialog.svelte";
   import { portList, requestChains, statusLabel, statusTone, type AppModel } from "./apps";
   import { api, shownError, type Fact } from "./api";
-  import { textOf } from "./format";
+  import { formatCount, readmeLead, textOf } from "./format";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, readManual, writeManual, type PanelData } from "./inventory";
   import { selectedApp } from "./selection";
@@ -14,6 +14,7 @@
 
   let { lang, appId = "", tab = "summary", role = "viewer" }: { lang: Lang; appId?: string; tab?: string; role?: string } = $props();
   let data = $state<PanelData | null>(null);
+  let technical = $state(false);
   let errorMessage = $state("");
   let query = $state("");
   let status = $state("all");
@@ -57,6 +58,7 @@
   }
 
   onMount(() => {
+    technical = localStorage.getItem("atlas.raw") === "1";
     void load();
   });
 
@@ -102,7 +104,14 @@
   }
 
   const readme = $derived(docs.find((doc) => String(doc.path).toLowerCase().includes("readme")));
-  const readmeText = $derived(typeof readme?.body === "string" ? readme.body.split(/\n\s*\n/)[0] ?? "" : "");
+  const readmeText = $derived(typeof readme?.body === "string" ? readmeLead(readme.body) : "");
+  const sourceFacts = $derived(
+    facts.filter(
+      (fact) =>
+        technical ||
+        (!fact.predicate.startsWith("dependency.") && !fact.predicate.startsWith("stack.")),
+    ),
+  );
   const chains = $derived(app && data ? requestChains(app, data.sites) : []);
   const runtimeFacts = $derived(facts.filter((fact) => /python|node|django|redis|postgres|version|framework/i.test(`${fact.predicate} ${fact.value}`)));
   const canAct = $derived(role !== "viewer");
@@ -150,7 +159,7 @@
             </div>
             <MiniBar label="CPU" text="—" percent={null} />
             <MiniBar label={copy(lang, "memory")} text="—" percent={null} />
-            <p class="kicker">{item.containers.length} {copy(lang, "containerCount")} · {copy(lang, "portsWord")} {portList(item.ports).join(", ") || "—"}</p>
+            <p class="kicker">{formatCount(lang, item.containers.length, "container")} · {copy(lang, "portsWord")} {portList(item.ports).join(", ") || "—"}</p>
           </a>
         {:else}
           <p class="text-sm text-fog">{data ? copy(lang, "noMatch") : copy(lang, "skeleton")}</p>
@@ -359,7 +368,7 @@
       {/if}
     {:else}
       <ul class="card">
-        {#each facts as fact (fact.id)}
+        {#each sourceFacts as fact (fact.id)}
           <li class="flex items-center justify-between gap-2 border-b border-smoke py-2">
             <span class="mono text-fog">{fact.predicate}</span>
             <Mark {lang} kind={fact.certainty === "unknown" ? "unknown" : fact.certainty === "derived" ? "derived" : "fact"} value={fact.value} how={fact.rule ?? fact.subject} at={fact.collected_at} />

@@ -104,7 +104,7 @@
       <div class="card"><Chart {lang} name="host.cpu.idle" seconds={range} title={copy(lang, "chartCpu")} mode="busy" /></div>
     {/if}
     {#if names.includes("host.memory.available_bytes")}
-      <div class="card"><Chart {lang} name="host.memory.available_bytes" seconds={range} title={copy(lang, "chartMem")} /></div>
+      <div class="card"><Chart {lang} name="host.memory.available_bytes" baseline={names.includes("host.memory.total_bytes") ? "host.memory.total_bytes" : ""} seconds={range} title={copy(lang, "chartMem")} mode="used" /></div>
     {/if}
     {#if diskName}
       <div class="card"><Chart {lang} name={diskName} seconds={range} title={copy(lang, "chartDisk")} mode="rate" /></div>

@@ -19,11 +19,44 @@ const words: Record<Lang, Record<Unit, Record<string, string>>> = {
   },
 };
 
+const counted: Record<Lang, Record<"container" | "stopped", Record<string, string>>> = {
+  ru: {
+    container: { one: "контейнер", few: "контейнера", many: "контейнеров", other: "контейнера" },
+    stopped: { one: "остановлен", few: "остановлены", many: "остановлены", other: "остановлены" },
+  },
+  en: {
+    container: { one: "container", other: "containers" },
+    stopped: { one: "stopped", other: "stopped" },
+  },
+};
+
+export function formatCount(lang: Lang, count: number, kind: "container" | "stopped"): string {
+  const category = new Intl.PluralRules(locale(lang)).select(count);
+  const table = counted[lang][kind];
+  const word = table[category] ?? table.other ?? table.many ?? "";
+  return `${count} ${word}`;
+}
+
 function plural(lang: Lang, count: number, unit: Unit): string {
   const category = new Intl.PluralRules(locale(lang)).select(count);
   const table = words[lang][unit];
   const word = table[category] ?? table.other ?? table.many ?? "";
   return `${count} ${word}`;
+}
+
+export function readmeLead(body: string): string {
+  const paragraph = body.trim().split(/\n\s*\n/)[0] ?? "";
+  return paragraph.replace(/^#{1,6}\s+/, "").trim();
+}
+
+export function listenerKey(protocol: string, port: number): string {
+  const family = protocol.toLowerCase().startsWith("udp") ? "udp" : "tcp";
+  return `${family}:${port}`;
+}
+
+export function zoneName(raw: string): string {
+  if (raw === "Etc/UTC" || raw === "UTC" || raw === "Etc/Universal") return "UTC";
+  return raw;
 }
 
 export function formatUptime(raw: unknown, lang: Lang): string {

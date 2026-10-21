@@ -30,6 +30,14 @@
       });
   });
 
+  function scheduleTitle(row: { key: string; payload: Record<string, unknown> }): string {
+    const description = textOf(row.payload.description);
+    const command = textOf(row.payload.command);
+    if (description && description !== row.key) return description;
+    if (command.length > 72) return `${command.slice(0, 69)}…`;
+    return command || row.key;
+  }
+
   const services = $derived(
     (data?.system.services ?? []).filter((row) => {
       if (query && !row.key.toLowerCase().includes(query.toLowerCase())) return false;
@@ -59,7 +67,7 @@
         <tbody>
           {#each data.system.schedules as row (row.key)}
             <tr>
-              <td>{textOf(row.payload.command) || row.key}</td>
+              <td>{scheduleTitle(row)}</td>
               <td class="mono">{textOf(row.payload.schedule) || textOf(row.payload.expression) || row.key}</td>
               <td>{textOf(row.payload.last_result) || "—"}</td>
             </tr>

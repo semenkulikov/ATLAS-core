@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { shownError } from "./api";
-  import { exposureOf, portHint, textOf, type Exposure } from "./format";
+  import { exposureOf, listenerKey, portHint, textOf, type Exposure } from "./format";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
   import { selectedApp } from "./selection";
@@ -41,9 +41,10 @@
     const grouped = new Map<string, Row>();
     for (const item of all) {
       const address = textOf(item.port.payload.address);
-      const protocol = textOf(item.port.payload.protocol) || "tcp";
+      const rawProtocol = textOf(item.port.payload.protocol) || "tcp";
+      const protocol = rawProtocol.toLowerCase().startsWith("udp") ? "udp" : "tcp";
       const port = Number(item.port.payload.port);
-      const key = `${protocol}:${port}`;
+      const key = listenerKey(rawProtocol, port);
       const process = item.port.payload.process as { comm?: string; cmdline?: string } | null;
       const exposure = exposureOf(address);
       const current = grouped.get(key) ?? {

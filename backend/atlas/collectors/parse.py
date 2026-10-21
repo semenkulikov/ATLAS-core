@@ -654,6 +654,28 @@ def port_from_proxy(value: str) -> int | None:
         return None
 
 
+_SS_LISTENER = re.compile(
+    r"^(?P<proto>tcp6|udp6|tcp|udp)\s+\S+\s+\d+\s+\d+\s+"
+    r"(?P<addr>\[[^\]]+\]|[^:\s]+):(?P<port>\d+)\s+\S+"
+    r".*?users:\(\(\"(?P<comm>[^\"]+)\",pid=(?P<pid>\d+)",
+    re.MULTILINE,
+)
+
+
+def parse_ss_listeners(text: str) -> dict[tuple[str, str, int], tuple[int, str]]:
+    """Map ``ss -lntup`` rows to ``(protocol, address, port) -> (pid, comm)``."""
+    found: dict[tuple[str, str, int], tuple[int, str]] = {}
+    for match in _SS_LISTENER.finditer(text):
+        proto = match.group("proto")
+        family = "udp" if proto.startswith("udp") else "tcp"
+        address = match.group("addr").strip("[]").split("%", 1)[0]
+        port = int(match.group("port"))
+        owner = (int(match.group("pid")), match.group("comm"))
+        found[(proto, address, port)] = owner
+        found[(family, address, port)] = owner
+    return found
+
+
 def _strip_hash_comment(line: str) -> str:
     in_single = False
     in_double = False

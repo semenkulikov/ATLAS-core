@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exposureOf, formatBytes, formatPercent, formatUptime } from "./format";
+import { exposureOf, formatBytes, formatCount, formatPercent, formatUptime, listenerKey, readmeLead, zoneName } from "./format";
 
 describe("human units", () => {
   it("turns raw uptime seconds into days", () => {
@@ -12,6 +12,18 @@ describe("human units", () => {
     expect(formatBytes(312 * 1024 * 1024, "ru")).toBe("312 МБ");
     expect(formatPercent(4.2, "ru")).toBe("4,2%");
     expect(formatPercent(88, "en")).toBe("88%");
+  });
+
+  it("agrees Russian counts and shows UTC without the Etc prefix", () => {
+    expect(formatCount("ru", 1, "stopped")).toBe("1 остановлен");
+    expect(formatCount("ru", 3, "container")).toBe("3 контейнера");
+    expect(zoneName("Etc/UTC")).toBe("UTC");
+  });
+
+  it("reads the first paragraph after blank lines and joins address families", () => {
+    expect(readmeLead("\n\n# Bedolaga Bot\n\nMore.")).toBe("Bedolaga Bot");
+    expect(listenerKey("tcp", 22)).toBe(listenerKey("tcp6", 22));
+    expect(listenerKey("udp", 53)).not.toBe(listenerKey("tcp", 53));
   });
 
   it("treats the whole loopback range as this server only", () => {

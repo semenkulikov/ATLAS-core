@@ -14,6 +14,7 @@ from atlas.collectors.parse import (
     parse_os_release,
     parse_passwd,
     parse_proc_net,
+    parse_ss_listeners,
     parse_systemctl_show,
     parse_unit,
     port_from_proxy,
@@ -26,6 +27,16 @@ TCP = (
     "   1: 0100007F:1F40 00000000:0000 0A 00000000:00000000 00:00000000 "
     "00000000  1000        0 99999 1 0000000000000000 100 0 0 10 0\n"
 )
+
+
+def test_ss_names_the_process_when_proc_hides_the_inode() -> None:
+    text = (
+        'tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=1474660,fd=3))\n'
+        'tcp LISTEN 0 511 [::]:80 [::]:* users:(("nginx",pid=1480320,fd=6))\n'
+    )
+    found = parse_ss_listeners(text)
+    assert found[("tcp", "0.0.0.0", 22)] == (1474660, "sshd")
+    assert found[("tcp", "::", 80)] == (1480320, "nginx")
 
 
 def test_proc_net_decodes_listen_addresses() -> None:

@@ -215,6 +215,9 @@ export function isSystemUser(row: Entity): boolean {
   if (["/usr/sbin/nologin", "/sbin/nologin", "/bin/false", "/usr/bin/false", "/bin/sync"].includes(shell)) {
     return true;
   }
+  if (["/bin/sh", "/bin/bash", "/bin/zsh", "/bin/fish", "/usr/bin/bash", "/usr/bin/zsh", "/usr/bin/fish"].includes(shell)) {
+    return false;
+  }
   if (Number.isFinite(uid) && uid > 0 && uid < 1000 && !home.startsWith("/home/")) return true;
   return false;
 }

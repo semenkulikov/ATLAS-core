@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import { hasPublicPort, portList, statusLabel, statusTone, type AppModel } from "./apps";
   import { api, shownError } from "./api";
-  import { exposureOf, formatBitrate, formatBytes, formatPercent, formatUptime, formatWhen, textOf } from "./format";
+  import { exposureOf, formatBitrate, formatBytes, formatCount, formatPercent, formatUptime, formatWhen, textOf, zoneName } from "./format";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
   import Mark from "./ui/Mark.svelte";
@@ -37,7 +37,7 @@
       if (app.status === "down" || stopped.length > 0) {
         rows.push({
           level: "bad",
-          text: `${app.name}: ${stopped.length || app.services.length} ${copy(lang, "attentionStopped")}`,
+          text: `${app.name}: ${formatCount(lang, stopped.length || app.services.length, "stopped")}`,
           href: `#/apps/${app.id}/running`,
         });
       }
@@ -52,9 +52,13 @@
     if (memPct !== null && memPct >= 90) {
       rows.push({ level: "warn", text: copy(lang, "attentionMemory"), href: "#/monitoring" });
     }
+    const seenPorts = new Set<number>();
     for (const port of data.system.ports) {
       if (exposureOf(textOf(port.payload.address)) !== "external") continue;
       if (port.payload.process) continue;
+      const number = Number(port.payload.port);
+      if (seenPorts.has(number)) continue;
+      seenPorts.add(number);
       rows.push({
         level: "warn",
         text: `${copy(lang, "portWord")} ${port.payload.port} ${copy(lang, "attentionOrphan")}`,
@@ -175,6 +179,11 @@
     <header class="mb-6">
       <div class="flex flex-wrap items-center gap-3">
         <h1 class="screen-title">{data.hostname || copy(lang, "serverName")}</h1>
+        {#if canScan}
+          <button type="button" class="btn btn-secondary" disabled={busy} onclick={() => void runScan()}>
+            {busy ? copy(lang, "scanning") : copy(lang, "runScan")}
+          </button>
+        {/if}
         {#if attention.length === 0}
           <StatusDot kind="ok" label={copy(lang, "serverFine")} />
         {:else}
@@ -223,7 +232,7 @@
         <h2 class="block-title mb-3">{copy(lang, "attention")}</h2>
         <ul class="divide-y divide-smoke">
           {#each attention as row (`${row.href}:${row.text}`)}
-            <li class="flex flex-wrap items-center gap-3 py-2">
+            <li class="attention-row flex flex-wrap items-center gap-3 py-2">
               <StatusDot kind={row.level} label={row.level === "bad" ? copy(lang, "down") : copy(lang, "attention")} />
               <p class="min-w-0 flex-1 text-sm text-paper">{row.text}</p>
               <a class="btn btn-secondary" href={row.href}>{copy(lang, "openItem")}</a>
@@ -258,7 +267,7 @@
           <MiniBar label="CPU" text="—" percent={null} />
           <MiniBar label={copy(lang, "memory")} text={memText(app)} percent={null} />
           <p class="kicker">
-            {app.containers.length} {copy(lang, "containerCount")}
+            {formatCount(lang, app.containers.length, "container")}
             · {copy(lang, "portsWord")} {portList(app.ports).join(", ") || "—"}
             {#if hasPublicPort(app.ports)} · {copy(lang, "fromInternet")}{/if}
           </p>
@@ -280,7 +289,7 @@
           <div><dt class="kicker">{copy(lang, "archWord")}</dt><dd class="text-paper">{data.arch || "—"}{data.cpuCount ? ` · ${data.cpuCount} ${copy(lang, "cores")}` : ""}</dd></div>
           <div><dt class="kicker">{copy(lang, "memory")}</dt><dd class="text-paper">{data.memTotal ? formatBytes(data.memTotal, lang) : "—"}</dd></div>
           <div><dt class="kicker">{copy(lang, "primaryIp")}</dt><dd class="mono text-paper">{data.ip || "—"}</dd></div>
-          <div><dt class="kicker">{copy(lang, "timezoneLabel")}</dt><dd class="text-paper">{data.timezone || "—"}</dd></div>
+          <div><dt class="kicker">{copy(lang, "timezoneLabel")}</dt><dd class="text-paper">{data.timezone ? zoneName(data.timezone) : "—"}</dd></div>
         </dl>
         <a class="mt-4 inline-block text-sm text-info" href="#/system/services">{copy(lang, "systemServices")}</a>
       {/if}

@@ -61,6 +61,12 @@ def test_whitelist_refuses_a_protected_unit_and_a_shell_character() -> None:
     remove = build_plan("container.remove", {"name": "atlas-probe", "force": True})
     assert remove.argv == ("docker", "rm", "--force", "atlas-probe")
     listed = build_plan("read.dir", {"path": "/etc/sudoers.d"})
+    sockets = build_plan("read.command", {"argv": ["ss", "-lntup"]})
+    assert sockets.argv == ("ss", "-lntup")
+    project = build_plan("read.project", {"path": "/root/session_bot/main.py"})
+    assert project.confirm == "/root/session_bot/main.py"
+    with pytest.raises(ProtocolError):
+        build_plan("read.project", {"path": "/etc/passwd"})
     assert listed.confirm == "/etc/sudoers.d"
     with pytest.raises(ProtocolError):
         build_plan("read.dir", {"path": "/etc/passwd"})
@@ -119,6 +125,42 @@ def test_helper_rejects_a_foreign_peer_and_can_cancel_reboot() -> None:
     finally:
         server.close()
         shutil.rmtree(directory, ignore_errors=True)
+
+
+def test_reboot_risk_names_containers_and_keeps_ssh_when_its_socket_is_on(tmp_path: Path) -> None:
+    from atlas.domain import Entity
+
+    store = Store.open(tmp_path / "atlas.db")
+    scan_id = store.start_scan("manual")
+    store._insert_entity(
+        scan_id,
+        Entity(
+            "service",
+            "ssh.service",
+            {"unit.active": "active", "unit.enabled": "disabled"},
+        ),
+    )
+    store._insert_entity(
+        scan_id,
+        Entity(
+            "service",
+            "ssh.socket",
+            {"unit.active": "active", "unit.enabled": "enabled"},
+        ),
+    )
+    store._insert_entity(
+        scan_id,
+        Entity(
+            "container",
+            "355f1f16ea14",
+            {"name": "remnawave", "restart_policy": "no"},
+        ),
+    )
+    store.finish_scan(scan_id, "succeeded")
+    risks = restart_risks(store)
+    assert all(item["name"] != "ssh.service" for item in risks)
+    assert {"kind": "container", "name": "remnawave", "enabled": "no"} in risks
+    store.close()
 
 
 def test_control_is_off_until_the_host_command(tmp_path: Path) -> None:

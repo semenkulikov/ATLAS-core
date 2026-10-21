@@ -45,6 +45,10 @@ _FIREWALL_ARGV = {
     ("ufw", "status", "verbose"),
     ("firewall-cmd", "--list-all"),
 }
+_SOCKET_ARGV = {
+    ("ss", "-lntup"),
+}
+_PROJECT_PATH = re.compile(r"^/(?:root|opt|srv|home|var/www)/[A-Za-z0-9._/-]{1,240}$")
 _SUDOERS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _HOME_KEYS = re.compile(r"^/(?:root|home/[a-z_][a-z0-9_-]{0,31})/\.ssh/authorized_keys$")
 _SSHD_DROPIN = re.compile(r"^/etc/ssh/sshd_config\.d/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -152,9 +156,14 @@ def build_plan(op: str, params: dict[str, object]) -> Plan:
         if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
             raise ProtocolError("A fixed command argv is required.")
         firewall_argv = tuple(str(item) for item in raw)
-        if firewall_argv not in _FIREWALL_ARGV:
+        if firewall_argv not in _FIREWALL_ARGV and firewall_argv not in _SOCKET_ARGV:
             raise ProtocolError("That command is not on the read whitelist.")
         return Plan(op, firewall_argv, "low", " ".join(firewall_argv))
+    if op == "read.project":
+        target = params.get("path")
+        if not isinstance(target, str) or not project_path(target):
+            raise ProtocolError("That project path is not on the read whitelist.")
+        return Plan(op, (), "low", target)
     if op == "read.dir":
         target = params.get("path")
         if not isinstance(target, str) or not readable_dir(target):
@@ -180,6 +189,13 @@ def readable_path(path: str) -> bool:
 def readable_dir(path: str) -> bool:
     """Return whether the helper may list names under ``path``."""
     return path in _READABLE_DIRS
+
+
+def project_path(path: str) -> bool:
+    """Return whether the helper may look for a project under ``path``."""
+    if ".." in path.split("/"):
+        return False
+    return _PROJECT_PATH.fullmatch(path) is not None
 
 
 def readable_engine_path(path: str) -> bool:

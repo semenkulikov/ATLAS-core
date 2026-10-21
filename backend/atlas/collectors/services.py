@@ -12,6 +12,7 @@ from atlas.collectors.parse import (
     is_exposed_address,
     parse_crontab,
     parse_proc_net,
+    parse_ss_listeners,
     parse_systemctl_show,
     parse_unit,
     tcp_state_counts,
@@ -150,6 +151,7 @@ class PortsCollector:
     def collect(self, view: HostView) -> CollectorResult:
         bag = Bag(self.name, view.now)
         inodes = socket_owners(view)
+        listeners = _listener_names(bag, view)
         found = False
         for logical, protocol in (
             ("/proc/net/tcp", "tcp"),
@@ -173,7 +175,7 @@ class PortsCollector:
                     )
             for port in parse_proc_net(outcome.text, protocol):
                 found = True
-                _emit_port(bag, logical, outcome.sha256, outcome.text, port, inodes)
+                _emit_port(bag, logical, outcome.sha256, outcome.text, port, inodes, listeners)
         if not found:
             bag.add_unknown("host", "ports", "listening sockets could not be read")
         return bag.freeze()
@@ -384,6 +386,26 @@ def _cron_file(
         )
 
 
+def _listener_names(bag: Bag, view: HostView) -> dict[tuple[str, str, int], tuple[int, str]]:
+    """Ask the helper for process names when socket inodes are hidden."""
+    if not view.helper_socket:
+        return {}
+    result = bag.privileged(view, ["ss", "-lntup"])
+    if not result.stdout:
+        return {}
+    return parse_ss_listeners(result.stdout)
+
+
+def _ss_owner(
+    listeners: dict[tuple[str, str, int], tuple[int, str]], port: ListenPort
+) -> tuple[int, str] | None:
+    address = port.address.split("%", 1)[0]
+    family = "udp" if port.protocol.startswith("udp") else "tcp"
+    return listeners.get((port.protocol, address, port.port)) or listeners.get(
+        (family, address, port.port)
+    )
+
+
 def _emit_port(
     bag: Bag,
     logical: str,
@@ -391,6 +413,7 @@ def _emit_port(
     text: str,
     port: ListenPort,
     inodes: dict[str, tuple[int, str, str]],
+    listeners: dict[tuple[str, str, int], tuple[int, str]],
 ) -> None:
     subject = f"port:{port.protocol}:{port.port}:{port.address}"
     quote = _line(text, port.line)
@@ -416,15 +439,22 @@ def _emit_port(
         "exposed": exposed,
         "inode": port.inode,
     }
-    if owner is None:
-        bag.add_unknown(subject, "port.process", "socket inode is not visible to this user")
-        payload["process"] = None
-    else:
+    hinted = None if owner is not None else _ss_owner(listeners, port)
+    if owner is not None:
         pid, comm, cmdline = owner
         bag.add_command(
             subject, "port.process", f"{pid} {comm}", ["proc", str(pid), "fd"], cmdline or comm
         )
         payload["process"] = {"pid": pid, "comm": comm, "cmdline": cmdline}
+    elif hinted is not None:
+        hinted_pid, hinted_comm = hinted
+        bag.add_command(
+            subject, "port.process", f"{hinted_pid} {hinted_comm}", ["ss", "-lntup"], hinted_comm
+        )
+        payload["process"] = {"pid": hinted_pid, "comm": hinted_comm, "cmdline": hinted_comm}
+    else:
+        bag.add_unknown(subject, "port.process", "socket inode is not visible to this user")
+        payload["process"] = None
     bag.entity("port", subject, payload)
 
 

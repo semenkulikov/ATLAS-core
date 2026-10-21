@@ -39,6 +39,11 @@ def read_command(path: str, argv: list[str]) -> dict[str, object]:
     return call_helper(path, {"op": "read.command", "params": {"argv": argv}})
 
 
+def read_project(path: str, target: str) -> dict[str, object]:
+    """Ask the helper for a project the panel user cannot see, such as one under /root."""
+    return call_helper(path, {"op": "read.project", "params": {"path": target}})
+
+
 def read_dir(path: str, target: str) -> dict[str, object]:
     """Ask the helper to list allowlisted directory names."""
     return call_helper(path, {"op": "read.dir", "params": {"path": target}})

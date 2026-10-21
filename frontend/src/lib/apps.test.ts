@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "./api";
-import { groupProjects, linkInventory } from "./apps";
+import { groupProjects, isSystemUser, linkInventory } from "./apps";
 
 function project(name: string, path: string): Entity {
   return { kind: "project", key: name, payload: { name, root_path: path, stack: ["Python"] } };
 }
+
+describe("accounts", () => {
+  it("keeps a login shell out of the system-user pile", () => {
+    const postgres: Entity = {
+      kind: "account",
+      key: "postgres",
+      payload: { uid: 110, shell: "/bin/bash", home: "/var/lib/postgresql" },
+    };
+    const nobody: Entity = {
+      kind: "account",
+      key: "nobody",
+      payload: { uid: 65534, shell: "/usr/sbin/nologin", home: "/nonexistent" },
+    };
+    expect(isSystemUser(postgres)).toBe(false);
+    expect(isSystemUser(nobody)).toBe(true);
+  });
+});
 
 describe("application grouping", () => {
   it("joins environment suffixes and leaves an unrelated directory alone", () => {

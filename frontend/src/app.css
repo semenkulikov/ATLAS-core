@@ -472,6 +472,14 @@ select {
   }
 }
 
+.palette {
+  background: #08090a;
+}
+
+.palette-card {
+  background: var(--color-obsidian);
+}
+
 .toast {
   position: fixed;
   left: 16px;
@@ -657,9 +665,13 @@ select {
 
   .rings {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(148px, 1fr);
-    overflow-x: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .attention-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .chain {

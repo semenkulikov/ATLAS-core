@@ -46,19 +46,25 @@ def set_control(store: Store, enabled: bool) -> None:
 
 
 _BOOT_STATES = frozenset({"enabled", "static", "indirect", "generated", "alias"})
+_SSH_UNITS = frozenset({"ssh.service", "sshd.service"})
+_SSH_SOCKETS = ("ssh.socket", "sshd.socket")
+
+
+def _socket_returns(row: dict[str, object]) -> bool:
+    return row.get("unit.enabled") in _BOOT_STATES or row.get("unit.active") == "active"
 
 
 def _starts_on_boot(name: str, enabled: object, by_name: dict[str, dict[str, object]]) -> bool:
     """A unit comes back when it, its socket, or its template parent is enabled."""
     if enabled in _BOOT_STATES:
         return True
+    if name in _SSH_UNITS and any(
+        _socket_returns(by_name.get(socket, {})) for socket in _SSH_SOCKETS
+    ):
+        return True
     if name.endswith(".service"):
         socket = f"{name[: -len('.service')]}.socket"
-        socket_row = by_name.get(socket, {})
-        if (
-            socket_row.get("unit.enabled") in _BOOT_STATES
-            or socket_row.get("unit.active") == "active"
-        ):
+        if _socket_returns(by_name.get(socket, {})):
             return True
         if "@" in name:
             parent = f"{name.split('@', 1)[0]}.service"
@@ -85,7 +91,13 @@ def restart_risks(store: Store) -> list[dict[str, str]]:
         payload = row["payload"]
         policy = payload.get("restart_policy")
         if policy in {None, "", "no"}:
-            found.append({"kind": "container", "name": str(row["key"]), "enabled": str(policy)})
+            raw_name = payload.get("name")
+            label = (
+                raw_name.strip()
+                if isinstance(raw_name, str) and raw_name.strip()
+                else str(row["key"])
+            )
+            found.append({"kind": "container", "name": label, "enabled": str(policy)})
     return found
 
 

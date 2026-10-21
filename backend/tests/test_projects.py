@@ -121,6 +121,39 @@ def test_discover_uses_a_systemd_anchor(tmp_path: Path) -> None:
     assert any(item.value == "FastAPI" for item in result.facts)
 
 
+def test_a_script_path_anchors_a_project_without_indexing_requirements(tmp_path: Path) -> None:
+    root = tmp_path / "tree"
+    project = root / "root" / "session_bot"
+    project.mkdir(parents=True)
+    (project / "requirements.txt").write_text("aiogram==3.13.1\n", encoding="utf-8")
+    (project / "README.md").write_text("\n\n# Session\n\nA bot.\n", encoding="utf-8")
+    view = open_view(root)
+    result = discover(
+        view,
+        [
+            CollectorResult(
+                (),
+                (
+                    Entity(
+                        "service",
+                        "session-bot.service",
+                        {
+                            "unit": "session-bot.service",
+                            "working_directory": None,
+                            "exec_start": "/root/session_bot/venv/bin/python /root/session_bot/main.py",
+                        },
+                    ),
+                ),
+                (),
+            )
+        ],
+    )
+    assert result.projects[0]["root_path"] == "/root/session_bot"
+    paths = [str(doc["path"]) for doc in result.docs]
+    assert any(path.endswith("README.md") for path in paths)
+    assert not any(path.endswith("requirements.txt") for path in paths)
+
+
 def test_an_unreadable_directory_does_not_abort_discovery(tmp_path: Path, monkeypatch) -> None:
     hidden = tmp_path / "hidden"
     hidden.mkdir()

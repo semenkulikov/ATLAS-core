@@ -200,8 +200,7 @@
           </div>
         {/if}
       </div>
-      <button type="button" class="search-btn btn btn-secondary hidden justify-start md:flex" onclick={() => (palette = true)}>
-        <Icon name="search" />
+      <button type="button" class="search-btn btn btn-secondary hidden justify-start whitespace-nowrap md:flex" onclick={() => (palette = true)}>
         {copy(lang, "searchPlaceholder")}
       </button>
       <div class="flex items-center justify-end gap-2">
@@ -283,8 +282,8 @@
 {/if}
 
 {#if palette}
-  <div class="atlas-backdrop-in fixed inset-0 z-30 grid place-items-start bg-void/80 px-4 pt-24" role="dialog" aria-modal="true" aria-label={copy(lang, "search")}>
-    <div class="card mx-auto w-full max-w-lg">
+  <div class="palette atlas-backdrop-in fixed inset-0 z-50 grid place-items-start px-4 pt-24" role="dialog" aria-modal="true" aria-label={copy(lang, "search")}>
+    <div class="card palette-card mx-auto w-full max-w-lg">
       <input class="h-10 w-full rounded-md border border-smoke bg-void px-3" bind:value={query} placeholder={copy(lang, "searchPlaceholder")} />
       <p class="kicker mt-3">{copy(lang, "navLabel")}</p>
       {#each navRoutes.filter((id) => copy(lang, id).toLowerCase().includes(query.toLowerCase())) as id (id)}

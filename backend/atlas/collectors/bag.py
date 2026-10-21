@@ -88,6 +88,19 @@ class Bag:
         self.sources.append(SourceStatus(self.collector, path, outcome.status, outcome.reason))
         return outcome
 
+    def privileged(self, view: HostView, argv: list[str], *, timeout: float = 8.0) -> CommandResult:
+        """Run a whitelisted command through the helper when the socket exists."""
+        view.commands_run.append(" ".join(argv))
+        result: CommandResult | None = None
+        if view.helper_socket:
+            result = _privileged_command(view.helper_socket, argv)
+        if result is None:
+            result = view.runner.run(argv, timeout=timeout)
+        status = "ok" if result.stdout or result.code == 0 else "unavailable"
+        reason = None if status == "ok" else (result.stderr or f"exit {result.code}")
+        self.sources.append(SourceStatus(self.collector, " ".join(argv), status, reason))
+        return result
+
     def command(self, view: HostView, argv: list[str], *, timeout: float = 8.0) -> CommandResult:
         view.commands_run.append(" ".join(argv))
         result = view.runner.run(argv, timeout=timeout)

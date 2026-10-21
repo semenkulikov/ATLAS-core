@@ -95,6 +95,11 @@ def discover(view: HostView, results: list[CollectorResult]) -> Discovery:
     seen: set[tuple[str, str]] = set()
     for anchor_kind, directory, anchor_text, source in _anchors(results):
         root = find_root(view, directory)
+        borrowed: dict[str, object] | None = None
+        if root is None and view.helper_socket:
+            borrowed = _borrow_project(view.helper_socket, directory)
+            raw_root = borrowed.get("root") if borrowed else None
+            root = raw_root if isinstance(raw_root, str) and raw_root.startswith("/") else None
         if root is None:
             continue
         key = (anchor_kind, os.path.normpath(root))
@@ -103,12 +108,19 @@ def discover(view: HostView, results: list[CollectorResult]) -> Discovery:
         seen.add(key)
         fingerprint = hashlib.sha256(f"{anchor_kind}\n{key[1]}".encode()).hexdigest()[:16]
         subject = f"project:{fingerprint}"
-        hits = apply_rules(view, root, anchor_text, view.now)
-        project_facts = hits_to_facts(subject, hits, view.now)
-        project_facts.extend(_version_facts(view, root, subject))
-        project_facts.extend(_compose_services(view, root, subject))
-        project_facts.extend(_git_facts(view, root, subject))
-        project_docs = _index_docs(view, root, fingerprint)
+        if borrowed is None:
+            hits = apply_rules(view, root, anchor_text, view.now)
+            project_facts = hits_to_facts(subject, hits, view.now)
+            project_facts.extend(_version_facts(view, root, subject))
+            project_facts.extend(_compose_services(view, root, subject))
+            project_facts.extend(_git_facts(view, root, subject))
+            project_docs = _index_docs(view, root, fingerprint)
+            stack = [hit.value for hit in hits]
+        else:
+            project_facts = []
+            project_docs = _docs_from_borrow(borrowed, fingerprint)
+            stack_raw = borrowed.get("stack")
+            stack = [str(item) for item in stack_raw] if isinstance(stack_raw, list) else []
         if not project_docs:
             project_facts.append(
                 unknown(
@@ -128,7 +140,7 @@ def discover(view: HostView, results: list[CollectorResult]) -> Discovery:
                 "fingerprint": fingerprint,
                 "anchor_kind": anchor_kind,
                 "anchor": source,
-                "stack": [hit.value for hit in hits],
+                "stack": stack,
             }
         )
         edges.append(
@@ -141,6 +153,45 @@ def discover(view: HostView, results: list[CollectorResult]) -> Discovery:
         )
     edges.extend(_port_edges(results))
     return Discovery(tuple(facts), tuple(projects), tuple(edges), tuple(docs))
+
+
+def project_snapshot(view: HostView, root: str) -> dict[str, object]:
+    """Describe one project the helper can read and the panel user cannot."""
+    hits = apply_rules(view, root, "", view.now)
+    docs: list[dict[str, object]] = []
+    for doc in _index_docs(view, root, "")[:40]:
+        body = doc.get("body")
+        if isinstance(body, str) and len(body) > 80_000:
+            doc = {**doc, "body": body[:80_000]}
+        docs.append(doc)
+    return {"root": root, "stack": [hit.value for hit in hits], "docs": docs}
+
+
+def _borrow_project(socket_path: str, start: str) -> dict[str, object] | None:
+    from atlas.helper.client import read_project
+
+    try:
+        answer = read_project(socket_path, start)
+    except (OSError, ValueError):
+        return None
+    project = answer.get("project")
+    if not answer.get("ok") or not isinstance(project, dict):
+        return None
+    return project
+
+
+def _docs_from_borrow(borrowed: dict[str, object], project_id: str) -> list[dict[str, object]]:
+    raw = borrowed.get("docs")
+    if not isinstance(raw, list):
+        return []
+    docs: list[dict[str, object]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        copied = dict(item)
+        copied["project_id"] = project_id
+        docs.append(copied)
+    return docs
 
 
 def find_root(view: HostView, start: str) -> str | None:
@@ -501,7 +552,7 @@ def _is_doc(filename: str, depth: int) -> bool:
         return True
     if lowered in {"openapi.yaml", "openapi.yml", "openapi.json"}:
         return True
-    return depth > 0 and lowered.endswith((".txt", ".rst"))
+    return depth > 0 and lowered.endswith(".rst")
 
 
 def _port_edges(results: list[CollectorResult]) -> list[dict[str, str]]:
