@@ -17,7 +17,8 @@ cp -a /src/backend /tmp/backend
 "$stage/python/bin/python3" -m pip install --target "$stage/app" /tmp/backend
 cp -a /src/frontend/dist "$stage/frontend/dist"
 cp /src/packaging/atlas.service /src/packaging/atlas-helper.service \
-  /src/packaging/atlas-update.service /src/packaging/atlas.tmpfiles \
+  /src/packaging/atlas-update.service /src/packaging/atlas-scan.service \
+  /src/packaging/atlas-scan.timer /src/packaging/atlas.tmpfiles \
   /src/packaging/pick-uid.sh /src/packaging/remove-atlas.sh \
   /src/packaging/atlas-cli.sh /src/packaging/apply-update.sh \
   /src/packaging/minisign.pub \

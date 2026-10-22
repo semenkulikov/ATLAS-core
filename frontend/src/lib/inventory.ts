@@ -23,6 +23,7 @@ export type PanelData = {
   ip: string;
   sshd: Record<string, string>;
   sessions: string;
+  firewall: Entity[];
   sites: Entity[];
   sourceCount: number;
   collectedAt: string | null;
@@ -130,6 +131,7 @@ export async function loadPanel(): Promise<PanelData> {
     ip: primaryAddress(network),
     sshd,
     sessions: textOf(payloadOf(host.passport?.sessions).text),
+    firewall: host.passport?.firewall ?? [],
     sites,
     sourceCount: host.sources.length,
     collectedAt: host.collected_at,

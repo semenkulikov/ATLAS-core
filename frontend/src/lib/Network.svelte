@@ -3,6 +3,7 @@
   import { shownError } from "./api";
   import { exposureOf, listenerKey, portHint, textOf, type Exposure } from "./format";
   import { copy, type Lang } from "./i18n";
+  import { chooseFirewall, portFirewall } from "./firewall";
   import { loadPanel, type PanelData } from "./inventory";
   import { selectedApp } from "./selection";
   import CopyButton from "./ui/CopyButton.svelte";
@@ -97,6 +98,7 @@
     local: rows.filter((row) => row.exposure === "local").length,
     orphan: rows.filter((row) => row.orphan).length,
   });
+  const firewall = $derived(data ? chooseFirewall(data.firewall) : null);
   const open = $derived(shown.find((row) => row.key === picked) ?? null);
 
   onMount(() => {
@@ -141,7 +143,10 @@
         <p class="mt-2 text-2xl text-paper">{counts.orphan}</p>
       </button>
     </div>
-    <p class="kicker mb-3">{copy(lang, "sortRisk")} · {copy(lang, "mergeV4")} · {copy(lang, "firewallNote")}</p>
+    <p class="kicker mb-3">
+      {copy(lang, "sortRisk")} · {copy(lang, "mergeV4")}
+      {#if !firewall} · {copy(lang, "firewallNote")}{/if}
+    </p>
     <div class="card overflow-auto p-0">
       <table class="data-table">
         <thead>
@@ -164,7 +169,17 @@
                 <span class="block">{row.owner || copy(lang, "ownerUnknown")}</span>
                 {#if row.orphan}<Mark {lang} kind="unknown" value={copy(lang, "ownerUnknown")} how={copy(lang, "noProcess")} />{/if}
               </td>
-              <td><span class="chip {row.exposure === 'external' ? 'warn' : ''}">{exposureLabel(row.exposure)}</span></td>
+              <td>
+                <span class="chip {row.exposure === 'external' ? 'warn' : ''}">{exposureLabel(row.exposure)}</span>
+                {#if row.exposure === "external" && firewall}
+                  {@const mark = portFirewall(row.exposure, row.protocol, row.port, firewall)}
+                  {#if mark === "allowed"}
+                    <span class="mt-1 block text-xs text-fog">{copy(lang, "firewallAllowed")}</span>
+                  {:else if mark === "missing"}
+                    <span class="mt-1 block text-xs text-fog">{copy(lang, "firewallMissing")}</span>
+                  {/if}
+                {/if}
+              </td>
               <td>{row.orphan ? copy(lang, "checkThis") : "—"}</td>
             </tr>
           {:else}

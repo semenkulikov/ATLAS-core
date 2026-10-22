@@ -355,6 +355,25 @@ def test_release_installs_a_websocket_library() -> None:
     assert "websockets" in script
 
 
+def test_scan_timer_runs_as_the_panel_user() -> None:
+    root = Path(__file__).resolve().parents[2]
+    unit = (root / "packaging" / "atlas-scan.service").read_text(encoding="utf-8")
+    timer = (root / "packaging" / "atlas-scan.timer").read_text(encoding="utf-8")
+    assert "User=atlas" in unit
+    assert "ProtectHome=yes" in unit
+    assert (
+        "scan --root / --db /var/lib/atlas/atlas.db --helper-socket /run/atlas/helper.sock" in unit
+    )
+    assert "OnActiveSec=15min" in timer
+    assert "OnUnitActiveSec=6h" in timer
+    for name in ("install.sh", "install-bundle.sh", "remove-atlas.sh"):
+        script = (root / "packaging" / name).read_text(encoding="utf-8")
+        assert "atlas-scan.timer" in script
+    bundle = (root / "packaging" / "install-bundle.sh").read_text(encoding="utf-8")
+    assert "systemctl start atlas-scan.timer" in bundle
+    assert "systemctl start atlas-scan.service" not in bundle
+
+
 def test_panel_unit_can_read_the_system_journal() -> None:
     root = Path(__file__).resolve().parents[2]
     unit = (root / "packaging" / "atlas.service").read_text(encoding="utf-8")

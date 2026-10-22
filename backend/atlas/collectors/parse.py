@@ -676,6 +676,145 @@ def parse_ss_listeners(text: str) -> dict[tuple[str, str, int], tuple[int, str]]
     return found
 
 
+@dataclass(frozen=True, slots=True)
+class FirewallPolicy:
+    """Input policy and the ports an accept rule names. Unknown is not a block."""
+
+    policy: str
+    allows: tuple[tuple[str, int], ...]
+
+
+def parse_firewall(kind: str, text: str) -> FirewallPolicy:
+    """Read a firewall listing. A policy we cannot see stays unknown."""
+    if kind == "nft":
+        return _parse_nft(text)
+    if kind == "iptables":
+        return _parse_iptables(text)
+    if kind == "ufw":
+        return _parse_ufw(text)
+    if kind == "firewalld":
+        return _parse_firewalld(text)
+    return FirewallPolicy("unknown", ())
+
+
+def _policy_name(name: str) -> str:
+    lowered = name.lower().strip("%")
+    if lowered in {"accept", "allow"}:
+        return "accept"
+    if lowered in {"drop", "deny", "reject"}:
+        return "drop"
+    return "unknown"
+
+
+def _port_numbers(raw: str) -> list[int]:
+    found: list[int] = []
+    for part in re.split(r"[\s,]+", raw.strip()):
+        if not part:
+            continue
+        if part.isdigit():
+            number = int(part)
+        elif "-" in part:
+            left, _, right = part.partition("-")
+            if not (left.isdigit() and right.isdigit()):
+                continue
+            start, end = int(left), int(right)
+            if not (1 <= start <= end <= 65535) or end - start >= 32:
+                continue
+            found.extend(range(start, end + 1))
+            continue
+        else:
+            continue
+        if 1 <= number <= 65535:
+            found.append(number)
+    return found
+
+
+def _remember(allows: list[tuple[str, int]], protocol: str, numbers: list[int]) -> None:
+    for number in numbers:
+        pair = (protocol, number)
+        if pair not in allows:
+            allows.append(pair)
+
+
+def _parse_nft(text: str) -> FirewallPolicy:
+    policy = "unknown"
+    hook = re.search(r"hook\s+input\b([^{}]*)", text, re.IGNORECASE)
+    if hook:
+        found = re.search(r"policy\s+(accept|drop|reject)", hook.group(1), re.IGNORECASE)
+        if found:
+            policy = _policy_name(found.group(1))
+    if policy == "unknown":
+        return FirewallPolicy("unknown", ())
+    allows: list[tuple[str, int]] = []
+    for line in text.splitlines():
+        low = line.lower()
+        if "accept" not in low or "drop" in low or "reject" in low:
+            continue
+        protocol = "udp" if re.search(r"\budp\b", low) and not re.search(r"\btcp\b", low) else "tcp"
+        brace = re.search(r"dport\s*\{([^}]*)\}", low)
+        numbers = _port_numbers(brace.group(1)) if brace else []
+        if not numbers:
+            single = re.search(r"dport\s+(\d+)", low)
+            numbers = _port_numbers(single.group(1)) if single else []
+        _remember(allows, protocol, numbers)
+    return FirewallPolicy(policy, tuple(allows))
+
+
+def _parse_iptables(text: str) -> FirewallPolicy:
+    header = re.search(r"^:INPUT\s+(ACCEPT|DROP|REJECT)\b", text, re.MULTILINE | re.IGNORECASE)
+    policy = _policy_name(header.group(1)) if header else "unknown"
+    if policy == "unknown":
+        return FirewallPolicy("unknown", ())
+    allows: list[tuple[str, int]] = []
+    for line in text.splitlines():
+        if not re.match(r"-A\s+INPUT\b", line) or not re.search(
+            r"-j\s+ACCEPT\b", line, re.IGNORECASE
+        ):
+            continue
+        low = line.lower()
+        protocol = "udp" if "-p udp" in low else "tcp"
+        found = re.search(r"--dports?\s+(\S+)", line, re.IGNORECASE)
+        if found:
+            _remember(allows, protocol, _port_numbers(found.group(1)))
+    return FirewallPolicy(policy, tuple(allows))
+
+
+def _parse_ufw(text: str) -> FirewallPolicy:
+    default = re.search(r"Default:\s*(deny|reject|allow|accept)", text, re.IGNORECASE)
+    policy = _policy_name(default.group(1)) if default else "unknown"
+    if policy == "unknown":
+        return FirewallPolicy("unknown", ())
+    allows: list[tuple[str, int]] = []
+    for line in text.splitlines():
+        if "ALLOW" not in line.upper():
+            continue
+        match = re.search(r"(\d[\d,\s-]*)/(tcp|udp)", line, re.IGNORECASE)
+        if match:
+            _remember(allows, match.group(2).lower(), _port_numbers(match.group(1)))
+    return FirewallPolicy(policy, tuple(allows))
+
+
+def _parse_firewalld(text: str) -> FirewallPolicy:
+    target = re.search(r"target:\s*(\S+)", text, re.IGNORECASE)
+    policy = "unknown"
+    if target:
+        name = target.group(1).lower().strip("%")
+        if name == "accept":
+            policy = "accept"
+        elif name in {"drop", "reject", "default"}:
+            policy = "drop"
+    if policy == "unknown":
+        return FirewallPolicy("unknown", ())
+    allows: list[tuple[str, int]] = []
+    ports = re.search(r"ports:\s*(.+)", text, re.IGNORECASE)
+    if ports:
+        for item in ports.group(1).split():
+            match = re.fullmatch(r"(\d+)/(tcp|udp)", item, re.IGNORECASE)
+            if match:
+                _remember(allows, match.group(2).lower(), [int(match.group(1))])
+    return FirewallPolicy(policy, tuple(allows))
+
+
 def _strip_hash_comment(line: str) -> str:
     in_single = False
     in_double = False

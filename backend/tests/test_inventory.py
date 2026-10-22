@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from atlas.application.scan import run_scan
 from atlas.collectors.host import SshCollector
 from atlas.collectors.platforms import engine_get
 from atlas.collectors.registry import declarations
+from atlas.collectors.services import SystemdCollector
 from atlas.collectors.view import open_view
 from atlas.storage.db import Store
 
@@ -138,6 +140,39 @@ def test_package_does_not_invoke_a_shell() -> None:
         text = path.read_text(encoding="utf-8")
         assert "shell=True" not in text
         assert "os.system(" not in text
+
+
+def test_unloaded_unit_file_is_shown_by_name(tmp_path: Path) -> None:
+    root = tmp_path / "host"
+    unit_dir = root / "etc" / "systemd" / "system"
+    unit_dir.mkdir(parents=True)
+    (unit_dir / "ledger.service").write_text(
+        "[Service]\nExecStart=/usr/bin/python3 /opt/ledger/main.py\n",
+        encoding="utf-8",
+    )
+    (unit_dir / "worker@.service").write_text(
+        "[Service]\nExecStart=/usr/bin/true\n",
+        encoding="utf-8",
+    )
+    commands = {
+        "systemctl show --type=service --all --no-pager": {
+            "stdout": "Id=nginx.service\nActiveState=active\n\n"
+        },
+        "systemctl show --no-pager ledger.service": {
+            "stdout": (
+                "Id=ledger.service\nActiveState=inactive\nSubState=dead\nUnitFileState=disabled\n"
+            )
+        },
+    }
+    (root / "commands.json").write_text(json.dumps(commands), encoding="utf-8")
+    result = SystemdCollector().collect(open_view(root))
+    services = {item.key: item.payload for item in result.entities if item.kind == "service"}
+    assert services["ledger.service"]["unit.active"] == "inactive"
+    assert services["ledger.service"]["unit.enabled"] == "disabled"
+    assert "unit.active" not in services["worker@.service"]
+    asked = [source.target for source in result.sources]
+    assert "systemctl show --no-pager ledger.service" in asked
+    assert not any(target.startswith("systemctl") and "worker@" in target for target in asked)
 
 
 def test_scanner_does_not_import_the_web_framework() -> None:

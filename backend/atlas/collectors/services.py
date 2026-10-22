@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from atlas.collectors.bag import Bag, declare
@@ -11,6 +12,7 @@ from atlas.collectors.parse import (
     UnitFile,
     is_exposed_address,
     parse_crontab,
+    parse_firewall,
     parse_proc_net,
     parse_ss_listeners,
     parse_systemctl_show,
@@ -25,7 +27,17 @@ SYSTEMCTL_SERVICES = ["systemctl", "show", "--type=service", "--all", "--no-page
 SYSTEMCTL_TIMERS = ["systemctl", "show", "--type=timer", "--all", "--no-pager"]
 SYSTEMCTL_SOCKETS = ["systemctl", "show", "--type=socket", "--all", "--no-pager"]
 LISTENER_ARGV = ["nsenter", "-t", "1", "-n", "ss", "-lntup"]
+_FIREWALL_KIND = {
+    "nft": "nft",
+    "iptables-save": "iptables",
+    "ufw": "ufw",
+    "firewall-cmd": "firewalld",
+}
 _UNIT_DIRS = ("/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system")
+# A concrete unit file. Templates (name@.service) are not loaded by `show` and are skipped.
+_UNIT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._@\-]*\.(service|timer|socket)$")
+_FILL_CHUNK = 40
+_FILL_LIMIT = 240
 
 
 class SystemdCollector:
@@ -83,13 +95,20 @@ class SystemdCollector:
         shown = _systemctl(view, bag, SYSTEMCTL_SERVICES)
         shown.update(_systemctl(view, bag, SYSTEMCTL_TIMERS))
         shown.update(_systemctl(view, bag, SYSTEMCTL_SOCKETS))
+        origins = _fill_missing_units(view, bag, files, shown)
         names = set(files) | set(shown)
         if not names:
             bag.add_unknown("host", "systemd", "no unit files and systemctl produced no output")
             return bag.freeze()
         for name in sorted(names):
             if name.endswith((".service", ".timer", ".socket")):
-                _emit_unit(bag, name, files.get(name), shown.get(name))
+                _emit_unit(
+                    bag,
+                    name,
+                    files.get(name),
+                    shown.get(name),
+                    origins.get(name, SYSTEMCTL_SERVICES),
+                )
         return bag.freeze()
 
 
@@ -243,11 +262,23 @@ class FirewallCollector:
             text = result.stdout.strip()
             if not text:
                 continue
+            parsed = parse_firewall(_FIREWALL_KIND.get(argv[0], ""), text[:200_000])
             masked = mask_secrets(text)[:8000]
             bag.add_command(
                 "host", "firewall.rules", f"{len(text.splitlines())} lines", argv, masked[:200]
             )
-            bag.entity("firewall", " ".join(argv), {"command": argv, "rules": masked})
+            bag.entity(
+                "firewall",
+                " ".join(argv),
+                {
+                    "command": argv,
+                    "rules": masked,
+                    "policy": parsed.policy,
+                    "ports": [
+                        {"protocol": protocol, "port": port} for protocol, port in parsed.allows
+                    ],
+                },
+            )
         return bag.freeze()
 
 
@@ -294,11 +325,42 @@ def _systemctl(view: HostView, bag: Bag, argv: list[str]) -> dict[str, dict[str,
     return parse_systemctl_show(result.stdout)
 
 
+def _fill_missing_units(
+    view: HostView,
+    bag: Bag,
+    files: dict[str, tuple[str, UnitFile, str | None]],
+    shown: dict[str, dict[str, str]],
+) -> dict[str, list[str]]:
+    """Ask systemctl for unit files the bulk snapshot never loaded.
+
+    ``systemctl show --type=service --all`` omits a disabled unit that has not
+    been started since boot. Naming the unit loads it. Templates are skipped.
+    """
+    origins: dict[str, list[str]] = {}
+    missing = [
+        name
+        for name in sorted(files)
+        if name not in shown and _UNIT_NAME.fullmatch(name) and "@." not in name
+    ]
+    if len(missing) > _FILL_LIMIT:
+        bag.note("systemctl", "unavailable", "unloaded unit list truncated at 240")
+        missing = missing[:_FILL_LIMIT]
+    for start in range(0, len(missing), _FILL_CHUNK):
+        chunk = missing[start : start + _FILL_CHUNK]
+        argv = ["systemctl", "show", "--no-pager", *chunk]
+        parsed = _systemctl(view, bag, argv)
+        for name in parsed:
+            origins.setdefault(name, argv)
+        shown.update(parsed)
+    return origins
+
+
 def _emit_unit(
     bag: Bag,
     name: str,
     file_info: tuple[str, UnitFile, str | None] | None,
     runtime: dict[str, str] | None,
+    evidence_argv: list[str] | None = None,
 ) -> None:
     subject = f"unit:{name}"
     if name.endswith(".timer"):
@@ -322,7 +384,7 @@ def _emit_unit(
                     subject,
                     predicate,
                     runtime[prop],
-                    SYSTEMCTL_SERVICES,
+                    evidence_argv or SYSTEMCTL_SERVICES,
                     f"{prop}={runtime[prop]}",
                 )
                 payload[predicate] = runtime[prop]

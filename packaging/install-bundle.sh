@@ -52,6 +52,16 @@ awk '
   { print }
 ' "$root/packaging/atlas.service" > /usr/lib/systemd/system/atlas.service
 
+awk '
+  /^ExecStart=/ {
+    print "Environment=PYTHONPATH=/opt/atlas/app"
+    print "ExecStart=/opt/atlas/python/bin/python3 -m atlas.cli.main scan --root / --db /var/lib/atlas/atlas.db --helper-socket /run/atlas/helper.sock"
+    next
+  }
+  { print }
+' "$root/packaging/atlas-scan.service" > /usr/lib/systemd/system/atlas-scan.service
+cp "$root/packaging/atlas-scan.timer" /usr/lib/systemd/system/atlas-scan.timer
+
 awk -v uid="$uid" '
   /^ExecStart=/ {
     print "Environment=PYTHONPATH=/opt/atlas/app"
@@ -77,12 +87,14 @@ printf '%s\n' "Installed from a signed archive. The interpreter is /opt/atlas/py
   > /etc/atlas/README
 
 systemctl daemon-reload
-systemctl enable atlas.service atlas-helper.service atlas-update.service
+systemctl enable atlas.service atlas-helper.service atlas-update.service atlas-scan.timer
 rm -f /run/atlas/web.sock /run/atlas/helper.sock
 systemctl reset-failed atlas.service atlas-helper.service 2>/dev/null || true
 # Restart the panel and helper only. Never start atlas-update here — that unit
 # replaces this install and would kill the oneshot mid-flight.
 systemctl restart atlas-helper.service atlas.service
+# Arm the timer. OnActiveSec waits 15 minutes; the scan service is not started here.
+systemctl start atlas-scan.timer
 
 i=0
 while [ "$i" -lt 150 ]; do

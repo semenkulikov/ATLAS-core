@@ -77,15 +77,15 @@ def test_rules_cover_node_go_and_static(tmp_path: Path) -> None:
     assert any(hit.value == "Static site" for hit in static)
 
 
-def test_aiogram_needs_an_entrypoint(tmp_path: Path) -> None:
+def test_aiogram_needs_a_python_entrypoint(tmp_path: Path) -> None:
     root = tmp_path / "tree"
-    (root / "opt" / "bot").mkdir(parents=True)
-    (root / "opt" / "bot" / "requirements.txt").write_text("aiogram==3.13.1\n", encoding="utf-8")
+    (root / "opt" / "ledger").mkdir(parents=True)
+    (root / "opt" / "ledger" / "requirements.txt").write_text("aiogram==3.13.1\n", encoding="utf-8")
     view = open_view(root)
-    without = apply_rules(view, "/opt/bot", "python worker.py", view.now)
-    assert not any(hit.rule == "stack.aiogram-bot" for hit in without)
-    with_bot = apply_rules(view, "/opt/bot", "python bot.py", view.now)
-    assert any(hit.rule == "stack.aiogram-bot" for hit in with_bot)
+    library = apply_rules(view, "/opt/ledger", "gunicorn app:app", view.now)
+    assert not any(hit.rule == "stack.aiogram-bot" for hit in library)
+    launched = apply_rules(view, "/opt/ledger", "python /opt/ledger/main.py", view.now)
+    assert any(hit.rule == "stack.aiogram-bot" for hit in launched)
 
 
 def test_reference_catalog_does_not_invent_a_unit() -> None:

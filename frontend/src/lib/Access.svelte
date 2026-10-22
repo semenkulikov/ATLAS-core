@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { isSystemUser } from "./apps";
-  import { shownError } from "./api";
+  import { api, shownError } from "./api";
   import { textOf } from "./format";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
@@ -13,9 +13,23 @@
   let errorMessage = $state("");
   let systemOpen = $state(false);
   let openUser = $state("");
+  let liveText = $state("");
+  let liveOk = $state(false);
+  let timer: ReturnType<typeof setInterval> | undefined;
 
   const people = $derived((data?.users ?? []).filter((row) => !isSystemUser(row) || row.key === "root" || Number(row.payload.uid) === 0));
   const system = $derived((data?.users ?? []).filter((row) => isSystemUser(row) && row.key !== "root"));
+
+  async function refreshSessions(): Promise<void> {
+    if (document.visibilityState === "hidden") return;
+    try {
+      const body = await api<{ ok: boolean; text: string }>("/api/v1/sessions/live");
+      liveOk = body.ok;
+      liveText = body.text;
+    } catch {
+      liveOk = false;
+    }
+  }
 
   onMount(() => {
     void loadPanel()
@@ -25,7 +39,11 @@
       .catch((error: unknown) => {
         errorMessage = shownError(error, lang);
       });
+    void refreshSessions();
+    timer = setInterval(() => void refreshSessions(), 15000);
   });
+
+  onDestroy(() => clearInterval(timer));
 
   function keysFor(user: string): number {
     return (data?.keys ?? []).filter((row) => row.payload.user === user).length;
@@ -115,7 +133,7 @@
       </table>
     </div>
     <h2 class="block-title mb-2">{copy(lang, "activeSessions")}</h2>
-    <p class="mb-4 text-sm text-fog">{data.sessions.trim() ? data.sessions : copy(lang, "nobodyOnline")}</p>
+    <p class="mb-4 whitespace-pre-wrap text-sm text-fog">{liveOk ? (liveText.trim() ? liveText : copy(lang, "nobodyOnline")) : data.sessions.trim() ? data.sessions : copy(lang, "nobodyOnline")}</p>
     <section class="card">
       <button type="button" class="flex w-full items-center justify-between" onclick={() => (systemOpen = !systemOpen)} aria-expanded={systemOpen}>
         <span class="block-title">{copy(lang, "systemAccounts")} ({system.length})</span>

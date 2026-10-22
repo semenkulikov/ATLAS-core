@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { hasPublicPort, portList, statusLabel, statusTone, type AppModel } from "./apps";
+  import { hasPublicPort, portList, statusLabel, statusTone } from "./apps";
   import { api, shownError } from "./api";
   import { exposureOf, formatBitrate, formatBytes, formatCount, formatPercent, formatUptime, formatWhen, textOf, zoneName } from "./format";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
+  import { liveCpu, liveRows, retainLive } from "./live";
+  import { appUsage } from "./usage";
   import Mark from "./ui/Mark.svelte";
   import MiniBar from "./ui/MiniBar.svelte";
   import Ring from "./ui/Ring.svelte";
@@ -134,11 +136,10 @@
     }
   }
 
-  function memText(app: AppModel): string {
-    return "—";
-  }
+  let releaseLive: (() => void) | undefined;
 
   onMount(() => {
+    releaseLive = retainLive();
     void load();
     const tick = () => {
       if (document.visibilityState === "visible") void load();
@@ -146,7 +147,10 @@
     timer = setInterval(tick, 5000);
   });
 
-  onDestroy(() => clearInterval(timer));
+  onDestroy(() => {
+    clearInterval(timer);
+    releaseLive?.();
+  });
 
   const headline = $derived(
     data ? `${data.os || copy(lang, "unknownStatus")} · ${data.virt || copy(lang, "unknownStatus")} · ${copy(lang, "workingNow")} ${formatUptime(data.uptimeRaw, lang) || copy(lang, "unknownStatus")}` : "",
@@ -248,6 +252,7 @@
     </div>
     <div class="mb-6 grid gap-4 md:grid-cols-2">
       {#each ordered as app, index (app.id)}
+        {@const usage = appUsage(app, $liveRows, $liveCpu)}
         <a class="card lift grid gap-3" href={`#/apps/${app.id}/summary`} style:animation-delay={`${index * 40}ms`}>
           <div class="flex items-center justify-between gap-2">
             <p class="text-paper">{app.name}</p>
@@ -264,8 +269,11 @@
               <span class="chip">{env}</span>
             {/each}
           </div>
-          <MiniBar label="CPU" text="—" percent={null} />
-          <MiniBar label={copy(lang, "memory")} text={memText(app)} percent={null} />
+          <MiniBar label="CPU" text={usage.cpu === null ? "—" : `${Math.round(usage.cpu)}%`} percent={usage.cpu} />
+          <MiniBar label={copy(lang, "memory")} text={usage.memory === null ? "—" : formatBytes(usage.memory, lang)} percent={null} />
+          {#if usage.memory === null && usage.cpu === null}
+            <p class="kicker">{copy(lang, "cpuUnknown")}</p>
+          {/if}
           <p class="kicker">
             {formatCount(lang, app.containers.length, "container")}
             · {copy(lang, "portsWord")} {portList(app.ports).join(", ") || "—"}

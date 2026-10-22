@@ -2,6 +2,19 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.7] - 2026-10-22
+
+### Fixed
+- A unit file missing from the bulk systemctl snapshot is queried by name, so a disabled service keeps its state.
+- A dependency row shows the package name. An unpinned package keeps that note beside the name.
+- An aiogram project is recognized when the launched program is any Python file, not only bot.py.
+- Application cards show processor and memory from the live sample of their own services and containers.
+- Access reads current logins with `who` instead of waiting for the next scan.
+- An external listener is marked allowed or absent when the collected firewall policy can be read.
+
+### Added
+- `atlas-scan.timer` runs an inventory scan as the panel user every six hours. The first run waits 15 minutes after the timer starts.
+
 ## [1.1.6] - 2026-10-21
 
 ### Fixed

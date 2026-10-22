@@ -90,7 +90,7 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     """Build the API. OpenAPI is not mounted publicly; owners fetch it explicitly."""
-    app = FastAPI(title="ATLAS", version="1.1.6", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="ATLAS", version="1.1.7", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.atlas = AppState(
         store,
         settings,
@@ -108,6 +108,7 @@ def create_app(
     app.add_api_route("/api/v1/tokens", create_token, methods=["POST"])
     app.add_api_route("/api/v1/openapi.json", openapi, methods=["GET"])
     app.add_api_route("/api/v1/host", host, methods=["GET"])
+    app.add_api_route("/api/v1/sessions/live", live_sessions, methods=["GET"])
     app.add_api_route("/api/v1/services", services, methods=["GET"])
     app.add_api_route("/api/v1/services/{unit}", service_one, methods=["GET"])
     app.add_api_route("/api/v1/containers", containers, methods=["GET"])
@@ -384,6 +385,17 @@ async def openapi(request: Request) -> Response:
     return _json(request, request.app.openapi())
 
 
+async def live_sessions(request: Request) -> Response:
+    """Current login lines. This does not write a scan."""
+    _require(request, _READ)
+    from atlas.collectors.view import SubprocessRunner
+
+    result = SubprocessRunner().run(["who"], timeout=5)
+    if result.code != 0 and not result.stdout:
+        return _json(request, {"ok": False, "text": ""})
+    return _json(request, {"ok": True, "text": result.stdout[:4000]})
+
+
 async def host(request: Request) -> Response:
     _require(request, _READ)
     state = _state(request)
@@ -394,7 +406,7 @@ async def host(request: Request) -> Response:
     ).fetchone()
     passport = {
         kind: state.store.entities(scan_id, kind)
-        for kind in ("resources", "network", "sshd", "sessions", "site")
+        for kind in ("resources", "network", "sshd", "sessions", "site", "firewall")
     }
     return _json(
         request,
@@ -628,7 +640,7 @@ async def stream(websocket: WebSocket) -> None:
                                 "memory_bytes": unit.memory_bytes,
                                 "cpu_usage_usec": unit.cpu_usage_usec,
                             }
-                            for unit in sample.units[:8]
+                            for unit in sample.units
                         ],
                         "containers": [
                             {
@@ -636,7 +648,7 @@ async def stream(websocket: WebSocket) -> None:
                                 "memory_bytes": item.memory_bytes,
                                 "cpu_usage_usec": item.cpu_usage_usec,
                             }
-                            for item in sample.containers[:8]
+                            for item in sample.containers
                         ],
                     }
                 )

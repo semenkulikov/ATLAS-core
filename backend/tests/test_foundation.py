@@ -89,6 +89,14 @@ def test_cgroup_rows_are_the_heaviest_not_the_first_names(tmp_path: Path) -> Non
     assert sample.containers[0].name == "abcdef123456"
     assert sample.containers[0].memory_bytes == 9000
 
+    for index in range(20):
+        directory = cgroup / f"unit{index:02d}.service"
+        directory.mkdir()
+        (directory / "memory.current").write_text(f"{index + 1}\n", encoding="utf-8")
+    wider = ProcMetricsSampler(proc, cgroup_root=tmp_path / "cgroup").sample()
+    assert len(wider.units) == 22
+    assert wider.units[0].name == "zzz"
+
 
 def test_default_sampler_returns_a_memory_reading() -> None:
     sample = default_sampler().sample()

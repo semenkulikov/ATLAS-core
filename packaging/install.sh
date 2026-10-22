@@ -95,6 +95,8 @@ mkdir -p \
 sed "s/__UID__/$uid/" "$root/packaging/atlas-helper.service" \
   > "$prefix/usr/lib/systemd/system/atlas-helper.service"
 cp "$root/packaging/atlas.service" "$prefix/usr/lib/systemd/system/atlas.service"
+cp "$root/packaging/atlas-scan.service" "$prefix/usr/lib/systemd/system/atlas-scan.service"
+cp "$root/packaging/atlas-scan.timer" "$prefix/usr/lib/systemd/system/atlas-scan.timer"
 cp "$root/packaging/atlas.tmpfiles" "$prefix/usr/lib/tmpfiles.d/atlas.conf"
 if [ "$prefix" = / ] && command -v systemd-tmpfiles >/dev/null 2>&1; then
   systemd-tmpfiles --create "$prefix/usr/lib/tmpfiles.d/atlas.conf"
@@ -116,8 +118,9 @@ printf '%s\n' "The application lives in /opt/atlas. Repeat this script to repair
 
 if [ "$prefix" = / ] && [ "$start" -eq 1 ]; then
   systemctl daemon-reload
-  systemctl enable atlas.service atlas-helper.service
+  systemctl enable atlas.service atlas-helper.service atlas-scan.timer
   systemctl restart atlas-helper.service atlas.service
+  systemctl start atlas-scan.timer
   i=0
   while [ "$i" -lt 150 ]; do
     if [ -S /run/atlas/web.sock ]; then

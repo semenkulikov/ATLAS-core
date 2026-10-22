@@ -293,10 +293,10 @@ class ProcMetricsSampler:
                     sample = _cgroup_sample("container", cid, entry)
                     if sample is not None:
                         containers.append(sample)
-        return _heaviest(units), _heaviest(containers)
+        return _heaviest(units), _heaviest(containers, limit=64)
 
 
-def _heaviest(rows: list[CgroupSample], limit: int = 12) -> tuple[CgroupSample, ...]:
+def _heaviest(rows: list[CgroupSample], limit: int = 64) -> tuple[CgroupSample, ...]:
     """Keep the rows that hold the most memory. A missing reading sorts last."""
     ranked = sorted(
         rows,

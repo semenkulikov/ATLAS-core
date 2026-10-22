@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import ActionDialog from "./ActionDialog.svelte";
   import { portList, requestChains, statusLabel, statusTone, type AppModel } from "./apps";
   import { api, shownError, type Fact } from "./api";
+  import { dependencyParts } from "./deps";
   import { changedFields, eventMatchesApp, eventTitle, type ChangeRow } from "./events";
-  import { formatCount, readmeLead, textOf } from "./format";
+  import { formatBytes, formatCount, readmeLead, textOf } from "./format";
+  import { liveCpu, liveRows, retainLive } from "./live";
+  import { appUsage } from "./usage";
   import { renderMarkdown } from "./markdown";
   import { copy, type Lang } from "./i18n";
   import { loadPanel, readManual, writeManual, type PanelData } from "./inventory";
@@ -72,10 +75,15 @@
     }
   }
 
+  let releaseLive: (() => void) | undefined;
+
   onMount(() => {
     technical = localStorage.getItem("atlas.raw") === "1";
+    releaseLive = retainLive();
     void load();
   });
+
+  onDestroy(() => releaseLive?.());
 
   $effect(() => {
     if (!openMenu) return;
@@ -187,6 +195,7 @@
     {#if view === "cards"}
       <div class="grid gap-4 md:grid-cols-2">
         {#each visible as item (item.id)}
+          {@const usage = appUsage(item, $liveRows, $liveCpu)}
           <a class="card lift grid gap-3" href={`#/apps/${item.id}/summary`}>
             <div class="flex items-center justify-between">
               <p class="text-paper">{item.name}</p>
@@ -196,8 +205,11 @@
               {#each item.stack.slice(0, 4) as name (name)}<span class="chip">{name}</span>{/each}
               {#each item.envs as env (env)}<span class="chip">{env}</span>{/each}
             </div>
-            <MiniBar label="CPU" text="—" percent={null} />
-            <MiniBar label={copy(lang, "memory")} text="—" percent={null} />
+            <MiniBar label="CPU" text={usage.cpu === null ? "—" : `${Math.round(usage.cpu)}%`} percent={usage.cpu} />
+            <MiniBar label={copy(lang, "memory")} text={usage.memory === null ? "—" : formatBytes(usage.memory, lang)} percent={null} />
+            {#if usage.memory === null && usage.cpu === null}
+              <p class="kicker">{copy(lang, "cpuUnknown")}</p>
+            {/if}
             <p class="kicker">{formatCount(lang, item.containers.length, "container")} · {copy(lang, "portsWord")} {portList(item.ports).join(", ") || "—"}</p>
           </a>
         {:else}
@@ -401,8 +413,14 @@
     {:else if tab === "deps"}
       <ul class="card divide-y divide-smoke">
         {#each (runtimeFacts.length ? runtimeFacts : facts).slice(0, runtimeFacts.length ? 12 : 8) as fact (fact.id)}
+          {@const part = dependencyParts(fact.predicate, fact.value)}
           <li class="flex items-center justify-between gap-3 py-2">
-            <span>{fact.value.toLowerCase().includes("not pinned") ? copy(lang, "unpinned") : fact.value}</span>
+            {#if fact.predicate.startsWith("dependency.")}
+              <span>{part.name}</span>
+              <span class="text-fog">{part.unpinned ? copy(lang, "unpinned") : part.detail}</span>
+            {:else}
+              <span>{fact.value}</span>
+            {/if}
             <Mark {lang} kind={fact.certainty === "unknown" ? "unknown" : fact.certainty === "derived" ? "derived" : "fact"} value={fact.value} how={fact.rule ?? fact.predicate} at={fact.collected_at} />
           </li>
         {:else}
@@ -414,7 +432,13 @@
           <summary class="cursor-pointer">{copy(lang, "allDependencies")} ({facts.length})</summary>
           <ul class="mt-2">
             {#each facts as fact (fact.id)}
-              <li class="py-1 text-sm">{fact.value}</li>
+              {@const part = dependencyParts(fact.predicate, fact.value)}
+              <li class="py-1 text-sm">
+                {fact.predicate.startsWith("dependency.") ? part.name : fact.value}
+                {#if fact.predicate.startsWith("dependency.")}
+                  <span class="text-fog"> · {part.unpinned ? copy(lang, "unpinned") : part.detail}</span>
+                {/if}
+              </li>
             {/each}
           </ul>
         </details>

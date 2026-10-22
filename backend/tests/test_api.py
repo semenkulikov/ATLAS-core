@@ -167,6 +167,32 @@ def test_owner_can_read_and_a_viewer_cannot_scan(tmp_path: Path) -> None:
     store.close()
 
 
+def test_live_sessions_read_who_without_a_scan(tmp_path: Path, monkeypatch) -> None:
+    from atlas.collectors.view import CommandResult
+
+    store = Store.open(tmp_path / "atlas.db")
+    app = create_app(
+        store,
+        Settings(tmp_path, allowed_hosts=("testserver",)),
+        sleeper=lambda _seconds: None,
+        clock=lambda: NOW,
+    )
+    client = TestClient(app)
+    _enroll(client, store, "owner", "a-long-password")
+
+    def scripted(self, argv, timeout=8.0):
+        del self, timeout
+        assert argv == ["who"]
+        return CommandResult(tuple(argv), 0, "root pts/9 2026-10-22 (203.0.113.8)\n", "")
+
+    monkeypatch.setattr("atlas.collectors.view.SubprocessRunner.run", scripted)
+    body = client.get("/api/v1/sessions/live")
+    assert body.status_code == 200
+    assert body.json() == {"ok": True, "text": "root pts/9 2026-10-22 (203.0.113.8)\n"}
+    assert store.latest_scan_id() is None
+    store.close()
+
+
 def test_public_bind_is_refused_without_tls() -> None:
     try:
         refuse_public_bind("0.0.0.0", tls=False, allowed_ips=())

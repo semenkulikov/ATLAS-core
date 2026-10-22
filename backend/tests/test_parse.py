@@ -10,6 +10,7 @@ from atlas.collectors.parse import (
     is_exposed_address,
     listen_exposure,
     parse_crontab,
+    parse_firewall,
     parse_nginx,
     parse_os_release,
     parse_passwd,
@@ -88,6 +89,55 @@ def test_systemctl_show_splits_units() -> None:
     shown = parse_systemctl_show(text)
     assert shown["nginx.service"]["ActiveState"] == "active"
     assert shown["shop.service"]["ActiveState"] == "inactive"
+
+
+def test_firewall_policy_names_accepted_ports_and_stays_unknown() -> None:
+    nft = parse_firewall(
+        "nft",
+        "chain input {\n"
+        "  type filter hook input priority 0; policy drop;\n"
+        "  tcp dport { 22, 80 } accept\n"
+        "  tcp dport 443 accept\n"
+        "  udp dport 53 accept\n"
+        "}\n",
+    )
+    assert nft.policy == "drop"
+    assert ("tcp", 22) in nft.allows and ("tcp", 443) in nft.allows
+    assert ("udp", 53) in nft.allows
+    assert ("tcp", 8080) not in nft.allows
+    open_input = parse_firewall(
+        "nft",
+        "chain input { type filter hook input priority 0; policy accept; }\n",
+    )
+    assert open_input.policy == "accept"
+    assert open_input.allows == ()
+    assert parse_firewall("nft", "not a ruleset").policy == "unknown"
+
+    tables = parse_firewall(
+        "iptables",
+        "*filter\n:INPUT DROP [0:0]\n"
+        "-A INPUT -p tcp -m tcp --dport 22 -j ACCEPT\n"
+        "-A INPUT -p tcp -m multiport --dports 80,443 -j ACCEPT\n"
+        "COMMIT\n",
+    )
+    assert tables.policy == "drop"
+    assert ("tcp", 80) in tables.allows and ("tcp", 22) in tables.allows
+
+    ufw = parse_firewall(
+        "ufw",
+        "Status: active\n"
+        "Default: deny (incoming), allow (outgoing)\n"
+        "22/tcp                     ALLOW IN    Anywhere\n",
+    )
+    assert ufw.policy == "drop"
+    assert ufw.allows == (("tcp", 22),)
+
+    firewalld = parse_firewall(
+        "firewalld",
+        "public (active)\n  target: DROP\n  ports: 22/tcp 443/tcp\n",
+    )
+    assert firewalld.policy == "drop"
+    assert ("tcp", 443) in firewalld.allows
 
 
 def test_passwd_skips_malformed_lines() -> None:

@@ -82,7 +82,8 @@ build_host() {
   rm -rf "$wheelhouse"
   cp -a "$root/frontend/dist" "$stage/frontend/dist"
   cp "$root/packaging/atlas.service" "$root/packaging/atlas-helper.service" \
-    "$root/packaging/atlas-update.service" "$root/packaging/atlas.tmpfiles" \
+    "$root/packaging/atlas-update.service" "$root/packaging/atlas-scan.service" \
+    "$root/packaging/atlas-scan.timer" "$root/packaging/atlas.tmpfiles" \
     "$root/packaging/pick-uid.sh" "$root/packaging/remove-atlas.sh" \
     "$root/packaging/atlas-cli.sh" "$root/packaging/apply-update.sh" \
     "$root/packaging/minisign.pub" \

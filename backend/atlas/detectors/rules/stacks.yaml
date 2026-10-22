@@ -40,7 +40,7 @@
     - any:
         - {path: requirements.txt, contains: aiogram}
         - {path: pyproject.toml, contains: aiogram}
-    - {path: anchor.txt, contains: bot.py}
+    - {path: anchor.txt, contains: ".py"}
 
 - name: node-express
   rule: stack.express
