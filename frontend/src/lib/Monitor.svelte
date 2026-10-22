@@ -7,6 +7,7 @@
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
   import { liveCpu, liveOn, liveRows, retainLive, type LiveRow } from "./live";
+  import { uplinkInterface } from "./net";
   import { selectedApp } from "./selection";
   import ErrorModal from "./ui/ErrorModal.svelte";
   import LiveBadge from "./ui/LiveBadge.svelte";
@@ -27,7 +28,10 @@
   ] as const;
 
   const diskName = $derived(names.find((name) => name.includes(".read_bytes")) ?? "");
-  const netName = $derived(names.find((name) => name.includes(".rx_bytes")) ?? "");
+  const netName = $derived.by(() => {
+    const iface = uplinkInterface(names, data?.defaultRoute ?? "");
+    return iface ? `host.net.${iface}.rx_bytes` : "";
+  });
   const filteredRows = $derived.by(() => {
     const id = $selectedApp;
     const app = id && data ? data.apps.find((item) => item.id === id) : undefined;

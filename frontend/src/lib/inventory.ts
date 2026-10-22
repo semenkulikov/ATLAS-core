@@ -20,6 +20,7 @@ export type PanelData = {
   memAvail: number | null;
   diskTotal: number | null;
   diskFree: number | null;
+  defaultRoute: string;
   ip: string;
   sshd: Record<string, string>;
   sessions: string;
@@ -128,6 +129,7 @@ export async function loadPanel(): Promise<PanelData> {
     memAvail: numberOrNull(resources["memory.available_bytes"]),
     diskTotal,
     diskFree,
+    defaultRoute: textOf(network.default_route),
     ip: primaryAddress(network),
     sshd,
     sessions: textOf(payloadOf(host.passport?.sessions).text),

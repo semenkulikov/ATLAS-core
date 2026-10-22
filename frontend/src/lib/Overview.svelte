@@ -6,6 +6,7 @@
   import { copy, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
   import { liveCpu, liveRows, retainLive } from "./live";
+  import { byteRate, uplinkInterface } from "./net";
   import { appUsage } from "./usage";
   import Mark from "./ui/Mark.svelte";
   import MiniBar from "./ui/MiniBar.svelte";
@@ -101,14 +102,27 @@
       errorMessage = "";
       void api<{ series: string[] }>("/api/v1/metrics/series")
         .then(async (body) => {
+          const end = Math.floor(Date.now() / 1000);
           if (body.series.includes("host.cpu.idle")) {
-            const end = Math.floor(Date.now() / 1000);
             const points = await api<{ points: { value: number }[] }>(
               `/api/v1/metrics/query?series=host.cpu.idle&start=${end - 120}&end=${end}&step=10`,
             );
             const last = points.points.at(-1);
             if (last) cpu = Math.max(0, Math.min(100, 100 - last.value));
           }
+          const iface = uplinkInterface(body.series, data?.defaultRoute ?? "");
+          if (!iface) {
+            netIn = null;
+            netOut = null;
+            return;
+          }
+          const query = (suffix: string) =>
+            api<{ points: { ts: number; value: number }[] }>(
+              `/api/v1/metrics/query?series=${encodeURIComponent(`host.net.${iface}.${suffix}`)}&start=${end - 60}&end=${end}&step=10`,
+            );
+          const [rx, tx] = await Promise.all([query("rx_bytes"), query("tx_bytes")]);
+          netIn = byteRate(rx.points);
+          netOut = byteRate(tx.points);
         })
         .catch(() => undefined);
       void api<{ risks: { kind: string; name: string }[] }>("/api/v1/control")

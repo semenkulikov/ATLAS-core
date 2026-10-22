@@ -2,6 +2,12 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.9] - 2026-10-22
+
+### Fixed
+- The overview network ring shows the uplink speed from the last two counter samples. The monitoring chart uses that same interface instead of the first bridge.
+- System services that are not part of an application are grouped by what they do, instead of one flat list.
+
 ## [1.1.8] - 2026-10-22
 
 ### Fixed

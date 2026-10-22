@@ -3,14 +3,19 @@
   import { isSystemUser } from "./apps";
   import { shownError } from "./api";
   import { formatBytes, formatUptime, textOf } from "./format";
-  import { copy, type Lang } from "./i18n";
+  import { serviceGroup, serviceGroupOrder } from "./groups";
+  import { copy, type CopyKey, type Lang } from "./i18n";
   import { loadPanel, type PanelData } from "./inventory";
+  import Accordion from "./ui/Accordion.svelte";
 
   let { lang, tab = "services" }: { lang: Lang; tab?: string } = $props();
   let data = $state<PanelData | null>(null);
   let errorMessage = $state("");
   let onlyDown = $state(false);
   let query = $state("");
+  let groupOpen = $state<Record<string, boolean>>({});
+
+  type ServiceRow = PanelData["system"]["services"][number];
 
   const tabs = [
     ["services", "servicesWord"],
@@ -46,7 +51,69 @@
       return active === "failed" || active === "inactive";
     }),
   );
+
+  const grouped = $derived.by(() => {
+    const buckets = new Map<CopyKey, ServiceRow[]>();
+    for (const row of services) {
+      const id = serviceGroup(row.key);
+      const list = buckets.get(id) ?? [];
+      list.push(row);
+      buckets.set(id, list);
+    }
+    return serviceGroupOrder
+      .filter((id) => (buckets.get(id)?.length ?? 0) > 0)
+      .map((id) => {
+        const rows = buckets.get(id) ?? [];
+        return {
+          id,
+          rows,
+          failed: rows.some((row) => textOf(row.payload["unit.active"]) === "failed"),
+        };
+      });
+  });
+
+  $effect.pre(() => {
+    const next = { ...groupOpen };
+    let changed = false;
+    for (const group of grouped) {
+      if (!(group.id in next)) {
+        next[group.id] = group.failed;
+        changed = true;
+      }
+    }
+    if (changed) groupOpen = next;
+  });
 </script>
+
+{#snippet serviceRows(rows: ServiceRow[])}
+  <div class="overflow-auto">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>{copy(lang, "fieldName")}</th>
+          <th>{copy(lang, "doesWhat")}</th>
+          <th>{copy(lang, "stateLabel")}</th>
+          <th>{copy(lang, "enabledWord")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each rows as row (row.key)}
+          <tr>
+            <td class="mono text-paper">{row.key}</td>
+            <td>{textOf(row.payload.description) || copy(lang, "noDescription")}</td>
+            <td>
+              {textOf(row.payload["unit.active"]) || "—"}
+              {#if row.key === "ssh.service" && textOf(row.payload["unit.active"]) !== "active"}
+                <span class="block text-xs text-fog">{copy(lang, "socketListen")}</span>
+              {/if}
+            </td>
+            <td>{textOf(row.payload["unit.enabled"]) === "enabled" ? copy(lang, "startOnBoot") : copy(lang, "notOnBoot")}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{/snippet}
 
 <section class="atlas-fade-in">
   <h1 class="screen-title mb-2">{copy(lang, "system")}</h1>
@@ -116,34 +183,13 @@
       <input class="h-8 rounded-md border border-smoke bg-void px-3 text-sm" placeholder={copy(lang, "filterQuery")} bind:value={query} />
       <button type="button" class="btn btn-secondary" aria-pressed={onlyDown} onclick={() => (onlyDown = !onlyDown)}>{copy(lang, "onlyFailed")}</button>
     </div>
-    <div class="card overflow-auto p-0">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>{copy(lang, "fieldName")}</th>
-            <th>{copy(lang, "doesWhat")}</th>
-            <th>{copy(lang, "stateLabel")}</th>
-            <th>{copy(lang, "enabledWord")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each services as row (row.key)}
-            <tr>
-              <td class="mono text-paper">{row.key}</td>
-              <td>{textOf(row.payload.description) || copy(lang, "noDescription")}</td>
-              <td>
-                {textOf(row.payload["unit.active"]) || "—"}
-                {#if row.key === "ssh.service" && textOf(row.payload["unit.active"]) !== "active"}
-                  <span class="block text-xs text-fog">{copy(lang, "socketListen")}</span>
-                {/if}
-              </td>
-              <td>{textOf(row.payload["unit.enabled"]) === "enabled" ? copy(lang, "startOnBoot") : copy(lang, "notOnBoot")}</td>
-            </tr>
-          {:else}
-            <tr><td colspan="4">{copy(lang, "empty")}</td></tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+    {#if grouped.length === 0}
+      <p class="text-sm text-fog">{copy(lang, "empty")}</p>
+    {/if}
+    {#each grouped as group (group.id)}
+      <Accordion title={copy(lang, group.id)} count={group.rows.length} bind:open={groupOpen[group.id]}>
+        {@render serviceRows(group.rows)}
+      </Accordion>
+    {/each}
   {/if}
 </section>
