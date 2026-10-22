@@ -2,6 +2,11 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.8] - 2026-10-22
+
+### Fixed
+- Firewall rules are read in the host network namespace. The helper keeps its private network, so a direct nft or iptables command there saw an empty ruleset.
+
 ## [1.1.7] - 2026-10-22
 
 ### Fixed

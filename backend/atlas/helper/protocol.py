@@ -40,10 +40,10 @@ _ENGINE_GET = frozenset(
     }
 )
 _FIREWALL_ARGV = {
-    ("nft", "list", "ruleset"),
-    ("iptables-save",),
-    ("ufw", "status", "verbose"),
-    ("firewall-cmd", "--list-all"),
+    ("nsenter", "-t", "1", "-n", "nft", "list", "ruleset"),
+    ("nsenter", "-t", "1", "-n", "iptables-save"),
+    ("nsenter", "-t", "1", "-n", "ufw", "status", "verbose"),
+    ("nsenter", "-t", "1", "-n", "firewall-cmd", "--list-all"),
 }
 _SOCKET_ARGV = {
     ("nsenter", "-t", "1", "-n", "ss", "-lntup"),

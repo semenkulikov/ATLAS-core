@@ -1,6 +1,6 @@
 [project]
 name = "atlas"
-version = "1.1.7"
+version = "1.1.8"
 description = "Evidence-backed inventory and admin panel for one Linux server."
 requires-python = ">=3.12"
 license = "Apache-2.0"

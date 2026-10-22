@@ -33,6 +33,15 @@ _FIREWALL_KIND = {
     "ufw": "ufw",
     "firewall-cmd": "firewalld",
 }
+
+
+def _firewall_kind(argv: list[str]) -> str:
+    for item in argv:
+        if item in _FIREWALL_KIND:
+            return _FIREWALL_KIND[item]
+    return ""
+
+
 _UNIT_DIRS = ("/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system")
 # A concrete unit file. Templates (name@.service) are not loaded by `show` and are skipped.
 _UNIT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._@\-]*\.(service|timer|socket)$")
@@ -218,51 +227,52 @@ class FirewallCollector:
         declare(
             "firewall",
             "command",
-            "nft list ruleset",
-            "nftables ruleset.",
-            "Правила nftables.",
+            "nsenter -t 1 -n nft list ruleset",
+            "nftables ruleset in the host network namespace.",
+            "Правила nftables в сетевом пространстве хоста.",
             requires_root=True,
         ),
         declare(
             "firewall",
             "command",
-            "iptables-save",
-            "iptables rules.",
-            "Правила iptables.",
+            "nsenter -t 1 -n iptables-save",
+            "iptables rules in the host network namespace.",
+            "Правила iptables в сетевом пространстве хоста.",
             requires_root=True,
         ),
         declare(
             "firewall",
             "command",
-            "ufw status verbose",
-            "ufw status.",
-            "Состояние ufw.",
+            "nsenter -t 1 -n ufw status verbose",
+            "ufw status in the host network namespace.",
+            "Состояние ufw в сетевом пространстве хоста.",
             requires_root=True,
         ),
         declare(
             "firewall",
             "command",
-            "firewall-cmd --list-all",
-            "firewalld zones.",
-            "Зоны firewalld.",
+            "nsenter -t 1 -n firewall-cmd --list-all",
+            "firewalld zones in the host network namespace.",
+            "Зоны firewalld в сетевом пространстве хоста.",
             requires_root=True,
         ),
     )
 
     def collect(self, view: HostView) -> CollectorResult:
         bag = Bag(self.name, view.now)
+        # The helper keeps PrivateNetwork. nsenter reads the host ruleset, as ss does.
         commands = (
-            ["nft", "list", "ruleset"],
-            ["iptables-save"],
-            ["ufw", "status", "verbose"],
-            ["firewall-cmd", "--list-all"],
+            ["nsenter", "-t", "1", "-n", "nft", "list", "ruleset"],
+            ["nsenter", "-t", "1", "-n", "iptables-save"],
+            ["nsenter", "-t", "1", "-n", "ufw", "status", "verbose"],
+            ["nsenter", "-t", "1", "-n", "firewall-cmd", "--list-all"],
         )
         for argv in commands:
             result = bag.command(view, argv, timeout=8)
             text = result.stdout.strip()
             if not text:
                 continue
-            parsed = parse_firewall(_FIREWALL_KIND.get(argv[0], ""), text[:200_000])
+            parsed = parse_firewall(_firewall_kind(argv), text[:200_000])
             masked = mask_secrets(text)[:8000]
             bag.add_command(
                 "host", "firewall.rules", f"{len(text.splitlines())} lines", argv, masked[:200]

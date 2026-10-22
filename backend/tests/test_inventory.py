@@ -11,7 +11,7 @@ from atlas.application.scan import run_scan
 from atlas.collectors.host import SshCollector
 from atlas.collectors.platforms import engine_get
 from atlas.collectors.registry import declarations
-from atlas.collectors.services import SystemdCollector
+from atlas.collectors.services import FirewallCollector, SystemdCollector
 from atlas.collectors.view import open_view
 from atlas.storage.db import Store
 
@@ -173,6 +173,27 @@ def test_unloaded_unit_file_is_shown_by_name(tmp_path: Path) -> None:
     asked = [source.target for source in result.sources]
     assert "systemctl show --no-pager ledger.service" in asked
     assert not any(target.startswith("systemctl") and "worker@" in target for target in asked)
+
+
+def test_firewall_is_read_in_the_host_namespace(tmp_path: Path) -> None:
+    root = tmp_path / "host"
+    root.mkdir()
+    commands = {
+        "nsenter -t 1 -n nft list ruleset": {
+            "stdout": (
+                "chain input {\n"
+                "  type filter hook input priority 0; policy drop;\n"
+                "  tcp dport 22 accept\n"
+                "}\n"
+            )
+        }
+    }
+    (root / "commands.json").write_text(json.dumps(commands), encoding="utf-8")
+    result = FirewallCollector().collect(open_view(root))
+    entity = next(item for item in result.entities if item.kind == "firewall")
+    assert entity.payload["policy"] == "drop"
+    assert {"protocol": "tcp", "port": 22} in entity.payload["ports"]
+    assert entity.key.startswith("nsenter -t 1 -n nft")
 
 
 def test_scanner_does_not_import_the_web_framework() -> None:

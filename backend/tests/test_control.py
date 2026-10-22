@@ -63,6 +63,12 @@ def test_whitelist_refuses_a_protected_unit_and_a_shell_character() -> None:
     listed = build_plan("read.dir", {"path": "/etc/sudoers.d"})
     sockets = build_plan("read.command", {"argv": ["nsenter", "-t", "1", "-n", "ss", "-lntup"]})
     assert sockets.argv == ("nsenter", "-t", "1", "-n", "ss", "-lntup")
+    rules = build_plan(
+        "read.command", {"argv": ["nsenter", "-t", "1", "-n", "nft", "list", "ruleset"]}
+    )
+    assert rules.argv[-3:] == ("nft", "list", "ruleset")
+    with pytest.raises(ProtocolError):
+        build_plan("read.command", {"argv": ["nft", "list", "ruleset"]})
     with pytest.raises(ProtocolError):
         build_plan("read.command", {"argv": ["ss", "-lntup"]})
     with pytest.raises(ProtocolError):
