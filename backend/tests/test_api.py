@@ -15,7 +15,7 @@ from atlas.api.settings import Settings, refuse_public_bind
 from atlas.application.scan import run_scan
 from atlas.collectors.view import open_view
 from atlas.metrics.sampler import HostSample, MemorySample
-from atlas.metrics.series import query_series, write_sample
+from atlas.metrics.series import list_series, query_series, write_sample
 from atlas.security.accounts import issue_bootstrap
 from atlas.storage.db import Store
 
@@ -200,6 +200,27 @@ def test_public_bind_is_refused_without_tls() -> None:
         assert "TLS" in str(exc)
     else:
         raise AssertionError("expected the bind to be refused")
+
+
+def test_series_list_keeps_the_uplink_when_containers_fill_the_page(tmp_path: Path) -> None:
+    store = Store.open(tmp_path / "atlas.db")
+    rows = [(f"host.container.c{index:02d}.memory_bytes", 1, 1.0) for index in range(40)]
+    rows.extend(
+        [
+            ("host.net.br-aa.rx_bytes", 1, 1.0),
+            ("host.net.ens3.rx_bytes", 1, 1.0),
+            ("host.net.ens3.tx_bytes", 1, 1.0),
+        ]
+    )
+    store.conn.executemany(
+        "INSERT INTO metric_points (series, ts, value) VALUES (?, ?, ?)",
+        rows,
+    )
+    store.conn.commit()
+    names = list_series(store.conn)
+    assert "host.net.ens3.rx_bytes" in names
+    assert "host.net.ens3.tx_bytes" in names
+    store.close()
 
 
 def test_bootstrap_expires(tmp_path: Path) -> None:

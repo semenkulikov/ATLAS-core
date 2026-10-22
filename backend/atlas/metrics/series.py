@@ -136,12 +136,53 @@ def _write_buckets(conn: sqlite3.Connection, rows: list[sqlite3.Row], step: int)
     )
 
 
+_HOST_PREFIXES = ("host.cpu.", "host.memory.", "host.load.", "host.disk.")
+_VIRTUAL_IFACE = (
+    "docker",
+    "br-",
+    "veth",
+    "virbr",
+    "cni",
+    "flannel",
+    "cali",
+    "dummy",
+    "tun",
+    "tap",
+    "ifb",
+)
+
+
+def _virtual_nic(series: str) -> bool:
+    if not series.startswith("host.net."):
+        return False
+    iface = series.removeprefix("host.net.")
+    if iface.endswith(".rx_bytes"):
+        iface = iface.removesuffix(".rx_bytes")
+    elif iface.endswith(".tx_bytes"):
+        iface = iface.removesuffix(".tx_bytes")
+    else:
+        return False
+    return iface.startswith(_VIRTUAL_IFACE)
+
+
 def list_series(conn: sqlite3.Connection) -> list[str]:
-    """Return the host series that already have at least one point."""
+    """Return host series that already have a point.
+
+    Container series sort first and used to fill the whole page, which hid the
+    uplink. Host totals and physical interfaces stay ahead of that page.
+    """
     rows = conn.execute(
         "SELECT DISTINCT series FROM metric_points WHERE series LIKE 'host.%' ORDER BY series"
     ).fetchall()
-    return [str(row["series"]) for row in rows][:36]
+    names = [str(row["series"]) for row in rows]
+    preferred = [
+        name
+        for name in names
+        if name.startswith(_HOST_PREFIXES)
+        or (name.startswith("host.net.") and not _virtual_nic(name))
+    ]
+    rest = [name for name in names if name not in set(preferred)]
+    return (preferred + rest)[: max(36, len(preferred))]
 
 
 def query_series(

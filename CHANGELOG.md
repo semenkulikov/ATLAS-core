@@ -2,6 +2,11 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Distro and arm64 install checks are left to users; this release was verified on Ubuntu 24.04 x86_64.
 
+## [1.1.10] - 2026-10-22
+
+### Fixed
+- The metrics series list keeps physical network counters when container series fill the first page, so the overview ring can see the uplink.
+
 ## [1.1.9] - 2026-10-22
 
 ### Fixed

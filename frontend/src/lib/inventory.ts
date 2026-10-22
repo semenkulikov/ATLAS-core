@@ -58,6 +58,10 @@ function payloadOf(rows: Entity[] | undefined): Record<string, unknown> {
   return rows?.[0]?.payload ?? {};
 }
 
+function hostPayload(rows: Entity[] | undefined): Record<string, unknown> {
+  return rows?.find((row) => row.key === "host")?.payload ?? {};
+}
+
 function numberOrNull(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -98,7 +102,7 @@ export async function loadPanel(): Promise<PanelData> {
   ]);
   const identity = host.entities.find((row) => row.key === "host")?.payload ?? {};
   const resources = payloadOf(host.passport?.resources);
-  const network = payloadOf(host.passport?.network);
+  const network = hostPayload(host.passport?.network);
   const sshdRaw = payloadOf(host.passport?.sshd);
   const sshd: Record<string, string> = {};
   for (const [key, value] of Object.entries(sshdRaw)) sshd[key] = textOf(value);
